@@ -24,6 +24,8 @@
 #include "memory.h"
 #include "timer.h"
 
+#include "threads.h"
+
 using namespace LAMMPS_NS;
 
 /* ---------------------------------------------------------------------- */
@@ -295,10 +297,13 @@ double ThrData::memory_usage()
 // with writing to the array .
 void LAMMPS_NS::data_reduce_thr(double *dall, int nall, int nthreads, int ndim, int tid)
 {
-#if defined(_OPENMP)
   // NOOP in single-threaded execution.
   if (nthreads == 1) return;
+#if defined(_OPENMP)
 #pragma omp barrier
+#else
+  abt_barrier();
+#endif
   {
     const int nvals = ndim*nall;
     const int idelta = nvals/nthreads + 1;
@@ -372,8 +377,4 @@ void LAMMPS_NS::data_reduce_thr(double *dall, int nall, int nthreads, int ndim, 
     }
 #endif
   }
-#else
-  // NOOP in non-threaded execution.
-  return;
-#endif
 }

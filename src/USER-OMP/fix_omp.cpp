@@ -42,8 +42,9 @@
 #include <omp.h>
 #endif
 
-
 #include "suffix.h"
+
+#include "threads.h"
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
@@ -53,6 +54,10 @@ static int get_tid()
   int tid = 0;
 #if defined(_OPENMP)
   tid = omp_get_thread_num();
+#else
+  ABT_thread self;
+  ABT_thread_self(&self);
+  ABT_thread_get_arg(self, (void **)&tid);
 #endif
   return tid;
 }
@@ -66,7 +71,7 @@ FixOMP::FixOMP(LAMMPS *lmp, int narg, char **arg)
 {
   if (narg < 4) error->all(FLERR,"Illegal package omp command");
 
-  int nthreads = 1;
+  int nthreads = g_num_threads;
   if (narg > 3) {
 #if defined(_OPENMP)
     if (strcmp(arg[3],"0") == 0)
@@ -135,12 +140,18 @@ FixOMP::FixOMP(LAMMPS *lmp, int narg, char **arg)
   _nthr = nthreads;
 #if defined(_OPENMP)
 #pragma omp parallel default(none) shared(lmp)
-#endif
   {
     const int tid = get_tid();
+#else
+  parallel_region("fix", [&](int tid) {
+#endif
     Timer *t = new Timer(lmp);
     thr[tid] = new ThrData(tid,t);
+#if defined(_OPENMP)
   }
+#else
+  });
+#endif
 }
 
 /* ---------------------------------------------------------------------- */
@@ -187,12 +198,18 @@ void FixOMP::init()
     _nthr = nthreads;
 #if defined(_OPENMP)
 #pragma omp parallel default(none)
-#endif
     {
       const int tid = get_tid();
+#else
+    parallel_region("fix", [&](int tid) {
+#endif
       Timer *t = new Timer(lmp);
       thr[tid] = new ThrData(tid,t);
+#if defined(_OPENMP)
     }
+#else
+    });
+#endif
   }
 
   // reset per thread timer
@@ -351,12 +368,18 @@ void FixOMP::pre_force(int)
 
 #if defined(_OPENMP)
 #pragma omp parallel default(none) shared(f,torque,erforce,de,drho)
-#endif
   {
     const int tid = get_tid();
+#else
+  parallel_region("pre_force", [&](int tid) {
+#endif
     thr[tid]->check_tid(tid);
     thr[tid]->init_force(nall,f,torque,erforce,de,drho);
-  } // end of omp parallel region
+#if defined(_OPENMP)
+  }
+#else
+  });
+#endif
 
   _reduced = false;
 }

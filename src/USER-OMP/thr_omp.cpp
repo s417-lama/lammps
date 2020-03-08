@@ -193,6 +193,8 @@ void ThrOMP::reduce_thr(void *style, const int eflag, const int vflag,
 
 #if defined(_OPENMP)
 #pragma omp critical
+#else
+      abt_lock();
 #endif
       {
         if (eflag & 1) {
@@ -207,6 +209,9 @@ void ThrOMP::reduce_thr(void *style, const int eflag, const int vflag,
             thr->virial_pair[i] = 0.0;
           }
       }
+#if !defined(_OPENMP)
+      abt_unlock();
+#endif
 
       if (eflag & 2) {
         data_reduce_thr(&(pair->eatom[0]), nall, nthreads, 1, tid);
@@ -224,6 +229,8 @@ void ThrOMP::reduce_thr(void *style, const int eflag, const int vflag,
       Bond * const bond = lmp->force->bond;
 #if defined(_OPENMP)
 #pragma omp critical
+#else
+      abt_lock();
 #endif
       {
         if (eflag & 1) {
@@ -238,6 +245,9 @@ void ThrOMP::reduce_thr(void *style, const int eflag, const int vflag,
           }
         }
       }
+#if !defined(_OPENMP)
+      abt_unlock();
+#endif
 
       if (eflag & 2) {
         data_reduce_thr(&(bond->eatom[0]), nall, nthreads, 1, tid);
@@ -255,6 +265,8 @@ void ThrOMP::reduce_thr(void *style, const int eflag, const int vflag,
       Angle * const angle = lmp->force->angle;
 #if defined(_OPENMP)
 #pragma omp critical
+#else
+      abt_lock();
 #endif
       {
         if (eflag & 1) {
@@ -269,6 +281,9 @@ void ThrOMP::reduce_thr(void *style, const int eflag, const int vflag,
           }
         }
       }
+#if !defined(_OPENMP)
+      abt_unlock();
+#endif
 
       if (eflag & 2) {
         data_reduce_thr(&(angle->eatom[0]), nall, nthreads, 1, tid);
@@ -286,6 +301,8 @@ void ThrOMP::reduce_thr(void *style, const int eflag, const int vflag,
       Dihedral * const dihedral = lmp->force->dihedral;
 #if defined(_OPENMP)
 #pragma omp critical
+#else
+      abt_lock();
 #endif
       {
         if (eflag & 1) {
@@ -300,6 +317,9 @@ void ThrOMP::reduce_thr(void *style, const int eflag, const int vflag,
           }
         }
       }
+#if !defined(_OPENMP)
+      abt_unlock();
+#endif
 
       if (eflag & 2) {
         data_reduce_thr(&(dihedral->eatom[0]), nall, nthreads, 1, tid);
@@ -318,6 +338,8 @@ void ThrOMP::reduce_thr(void *style, const int eflag, const int vflag,
       Pair * const pair = lmp->force->pair;
 #if defined(_OPENMP)
 #pragma omp critical
+#else
+      abt_lock();
 #endif
       {
         if (eflag & 1) {
@@ -338,6 +360,9 @@ void ThrOMP::reduce_thr(void *style, const int eflag, const int vflag,
           }
         }
       }
+#if !defined(_OPENMP)
+      abt_unlock();
+#endif
 
       if (eflag & 2) {
         data_reduce_thr(&(dihedral->eatom[0]), nall, nthreads, 1, tid);
@@ -356,6 +381,8 @@ void ThrOMP::reduce_thr(void *style, const int eflag, const int vflag,
       Improper *improper = lmp->force->improper;
 #if defined(_OPENMP)
 #pragma omp critical
+#else
+      abt_lock();
 #endif
       {
         if (eflag & 1) {
@@ -370,6 +397,9 @@ void ThrOMP::reduce_thr(void *style, const int eflag, const int vflag,
           }
         }
       }
+#if !defined(_OPENMP)
+      abt_unlock();
+#endif
 
       if (eflag & 2) {
         data_reduce_thr(&(improper->eatom[0]), nall, nthreads, 1, tid);
@@ -518,12 +548,17 @@ void ThrOMP::ev_tally_thr(Pair * const pair, const int i, const int j, const int
     // ev_tally callbacks are not thread safe and thus have to be protected
 #if defined(_OPENMP)
 #pragma omp critical
+#else
+    abt_lock();
 #endif
     for (int k=0; k < pair->num_tally_compute; ++k) {
       Compute *c = pair->list_tally_compute[k];
       c->pair_tally_callback(i, j, nlocal, newton_pair,
                              evdwl, ecoul, fpair, delx, dely, delz);
     }
+#if !defined(_OPENMP)
+    abt_unlock();
+#endif
   }
 }
 

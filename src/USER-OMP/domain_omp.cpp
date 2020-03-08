@@ -18,6 +18,8 @@
 #include "accelerator_omp.h"
 #include "atom.h"
 
+#include "threads.h"
+
 using namespace LAMMPS_NS;
 
 typedef struct { double x,y,z; } dbl3_t;
@@ -44,11 +46,13 @@ void DomainOMP::pbc()
   imageint    * _noalias const image = atom->image;
   const int nlocal = atom->nlocal;
 
-  int i;
 #if defined(_OPENMP)
+  int i;
 #pragma omp parallel for private(i) default(none) schedule(static)
-#endif
   for (i = 0; i < nlocal; i++) {
+#else
+  parallel_for("pbc", 0, nlocal, [&](int i) {
+#endif
     imageint idim,otherdims;
 
     if (xperiodic) {
@@ -130,7 +134,11 @@ void DomainOMP::pbc()
         image[i] = otherdims | (idim << IMG2BITS);
       }
     }
+#if defined (_OPENMP)
   }
+#else
+  });
+#endif
 }
 
 /* ----------------------------------------------------------------------
@@ -142,16 +150,22 @@ void DomainOMP::lamda2x(int n)
 {
   dbl3_t * _noalias const x = (dbl3_t *)&atom->x[0][0];
   const int num = n;
-  int i;
 
 #if defined(_OPENMP)
+  int i;
 #pragma omp parallel for private(i) default(none) schedule(static)
-#endif
   for (i = 0; i < num; i++) {
+#else
+  parallel_for("lambda2x", 0, num, [&](int i) {
+#endif
     x[i].x = h[0]*x[i].x + h[5]*x[i].y + h[4]*x[i].z + boxlo[0];
     x[i].y = h[1]*x[i].y + h[3]*x[i].z + boxlo[1];
     x[i].z = h[2]*x[i].z + boxlo[2];
+#if defined (_OPENMP)
   }
+#else
+  });
+#endif
 }
 
 /* ----------------------------------------------------------------------
@@ -163,12 +177,14 @@ void DomainOMP::x2lamda(int n)
 {
   dbl3_t * _noalias const x = (dbl3_t *)&atom->x[0][0];
   const int num = n;
-  int i;
 
 #if defined(_OPENMP)
+  int i;
 #pragma omp parallel for private(i) default(none) schedule(static)
-#endif
   for (i = 0; i < num; i++) {
+#else
+  parallel_for("x2lambda", 0, num, [&](int i) {
+#endif
     double delta0 = x[i].x - boxlo[0];
     double delta1 = x[i].y - boxlo[1];
     double delta2 = x[i].z - boxlo[2];
@@ -176,6 +192,10 @@ void DomainOMP::x2lamda(int n)
     x[i].x = h_inv[0]*delta0 + h_inv[5]*delta1 + h_inv[4]*delta2;
     x[i].y = h_inv[1]*delta1 + h_inv[3]*delta2;
     x[i].z = h_inv[2]*delta2;
+#if defined (_OPENMP)
   }
+#else
+  });
+#endif
 }
 

@@ -19,6 +19,8 @@
 #include "my_page.h"
 #include "error.h"
 
+#include "threads.h"
+
 using namespace LAMMPS_NS;
 
 /* ---------------------------------------------------------------------- */
@@ -95,7 +97,6 @@ void NPairHalfBinAtomonlyNewtonOmp::build(NeighList *list)
     }
 
     // loop over all atoms in other bins in stencil, store every pair
-
     ibin = atom2bin[i];
     for (k = 0; k < nstencil; k++) {
       for (j = binhead[ibin+stencil[k]]; j >= 0; j = bins[j]) {

@@ -14,6 +14,8 @@
 #include "fix_nve_omp.h"
 #include "atom.h"
 
+#include "threads.h"
+
 using namespace LAMMPS_NS;
 using namespace FixConst;
 
@@ -37,14 +39,16 @@ void FixNVEOMP::initial_integrate(int /* vflag */)
   const dbl3_t * _noalias const f = (dbl3_t *) atom->f[0];
   const int * const mask = atom->mask;
   const int nlocal = (igroup == atom->firstgroup) ? atom->nfirst : atom->nlocal;
-  int i;
 
   if (atom->rmass) {
     const double * const rmass = atom->rmass;
 #if defined (_OPENMP)
+    int i;
 #pragma omp parallel for private(i) default(none) schedule(static)
-#endif
     for (i = 0; i < nlocal; i++)
+#else
+    parallel_for("initial_integrate", 0, nlocal, [&](int i) {
+#endif
       if (mask[i] & groupbit) {
         const double dtfm = dtf / rmass[i];
         v[i].x += dtfm * f[i].x;
@@ -54,14 +58,20 @@ void FixNVEOMP::initial_integrate(int /* vflag */)
         x[i].y += dtv * v[i].y;
         x[i].z += dtv * v[i].z;
       }
+#if !defined (_OPENMP)
+    });
+#endif
 
   } else {
     const double * const mass = atom->mass;
     const int * const type = atom->type;
 #if defined (_OPENMP)
+    int i;
 #pragma omp parallel for private(i) default(none) schedule(static)
-#endif
     for (i = 0; i < nlocal; i++)
+#else
+    parallel_for("initial_integrate", 0, nlocal, [&](int i) {
+#endif
       if (mask[i] & groupbit) {
         const double dtfm = dtf / mass[type[i]];
         v[i].x += dtfm * f[i].x;
@@ -71,6 +81,9 @@ void FixNVEOMP::initial_integrate(int /* vflag */)
         x[i].y += dtv * v[i].y;
         x[i].z += dtv * v[i].z;
       }
+#if !defined (_OPENMP)
+    });
+#endif
   }
 }
 
@@ -84,34 +97,45 @@ void FixNVEOMP::final_integrate()
   const dbl3_t * _noalias const f = (dbl3_t *) atom->f[0];
   const int * const mask = atom->mask;
   const int nlocal = (igroup == atom->firstgroup) ? atom->nfirst : atom->nlocal;
-  int i;
 
   if (atom->rmass) {
     const double * const rmass = atom->rmass;
 #if defined (_OPENMP)
+    int i;
 #pragma omp parallel for private(i) default(none) schedule(static)
-#endif
     for (i = 0; i < nlocal; i++)
+#else
+    parallel_for("final_integrate", 0, nlocal, [&](int i) {
+#endif
       if (mask[i] & groupbit) {
         const double dtfm = dtf / rmass[i];
         v[i].x += dtfm * f[i].x;
         v[i].y += dtfm * f[i].y;
         v[i].z += dtfm * f[i].z;
       }
+#if !defined (_OPENMP)
+    });
+#endif
 
   } else {
     const double * const mass = atom->mass;
     const int * const type = atom->type;
 #if defined (_OPENMP)
+    int i;
 #pragma omp parallel for private(i) default(none) schedule(static)
-#endif
     for (i = 0; i < nlocal; i++)
+#else
+    parallel_for("final_integrate", 0, nlocal, [&](int i) {
+#endif
       if (mask[i] & groupbit) {
         const double dtfm = dtf / mass[type[i]];
         v[i].x += dtfm * f[i].x;
         v[i].y += dtfm * f[i].y;
         v[i].z += dtfm * f[i].z;
       }
+#if !defined (_OPENMP)
+    });
+#endif
   }
 }
 

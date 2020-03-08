@@ -2,18 +2,27 @@
 
 SHELL = /bin/sh
 
+ABT_PATH=$(realpath ../../myopt/argobots)
+
 # ---------------------------------------------------------------------
 # compiler/linker settings
 # specify flags and libraries needed for your compiler
 
+ifeq ($(DEBUG), 1)
+	CCFLAGS = -g -O0
+else
+	CCFLAGS = -g -O3
+endif
+
 CC =		g++
-CCFLAGS =	-g -O3
+CCFLAGS += -I../ -I$(ABT_PATH)/include
+CCFLAGS += -DLOGGER_ENABLE=1
 SHFLAGS =	-fPIC
 DEPFLAGS =	-M
 
 LINK =		g++
-LINKFLAGS =	-g -O
-LIB = 
+LINKFLAGS =	-g -O -L$(ABT_PATH)/lib -Wl,-R$(ABT_PATH)/lib
+LIB = -labt
 SIZE =		size
 
 ARCHIVE =	ar

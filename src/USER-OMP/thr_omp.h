@@ -26,6 +26,8 @@
 #include "fix_omp.h"  // IWYU pragma: export
 #include "thr_data.h" // IWYU pragma: export
 
+#include "threads.h"
+
 namespace LAMMPS_NS {
 
 // forward declarations
@@ -53,9 +55,11 @@ class ThrOMP {
   inline void sync_threads() {
 #if defined(_OPENMP)
 #pragma omp barrier
+#else
+    abt_barrier();
 #endif
-      { ; }
-    };
+    { ; }
+  };
 
   enum {THR_NONE=0,THR_PAIR=1,THR_BOND=1<<1,THR_ANGLE=1<<2,
         THR_DIHEDRAL=1<<3,THR_IMPROPER=1<<4,THR_KSPACE=1<<5,
@@ -183,10 +187,14 @@ static inline void loop_setup_thr(int &ifrom, int &ito, int &tid,
   ifrom = tid*idelta;
   ito   = ((ifrom + idelta) > inum) ? inum : ifrom + idelta;
 #else
-  tid = 0;
-  ifrom = 0;
-  ito = inum;
-  nthreads = 1;
+  ABT_thread self;
+  ABT_thread_self(&self);
+  ABT_thread_get_arg(self, (void **)&tid);
+
+  // each thread works on a fixed chunk of atoms.
+  const int idelta = 1 + inum/nthreads;
+  ifrom = tid*idelta;
+  ito   = ((ifrom + idelta) > inum) ? inum : ifrom + idelta;
 #endif
 }
 

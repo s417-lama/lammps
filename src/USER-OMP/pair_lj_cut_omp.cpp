@@ -23,6 +23,8 @@
 #include "suffix.h"
 using namespace LAMMPS_NS;
 
+#include "threads.h"
+
 /* ---------------------------------------------------------------------- */
 
 PairLJCutOMP::PairLJCutOMP(LAMMPS *lmp) :
@@ -45,8 +47,10 @@ void PairLJCutOMP::compute(int eflag, int vflag)
 
 #if defined(_OPENMP)
 #pragma omp parallel default(none) shared(eflag,vflag)
-#endif
   {
+#else
+  parallel_region("compute", [&](int tid_) {
+#endif
     int ifrom, ito, tid;
 
     loop_setup_thr(ifrom, ito, tid, inum, nthreads);
@@ -68,7 +72,11 @@ void PairLJCutOMP::compute(int eflag, int vflag)
     }
     thr->timer(Timer::PAIR);
     reduce_thr(this, eflag, vflag, thr);
-  } // end of omp parallel region
+#if defined(_OPENMP)
+  }
+#else
+  });
+#endif
 }
 
 template <int EVFLAG, int EFLAG, int NEWTON_PAIR>
