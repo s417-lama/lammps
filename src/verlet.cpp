@@ -31,6 +31,8 @@
 #include "timer.h"
 #include "error.h"
 
+#include "threads.h"
+
 using namespace LAMMPS_NS;
 
 /* ---------------------------------------------------------------------- */
@@ -289,6 +291,10 @@ void Verlet::run(int n)
       }
     }
 
+    if (i % 50 == 0) {
+      analysis();
+    }
+
     // force computations
     // important for pair to come before bonded contributions
     // since some bonded potentials tally pairwise energy/virial
@@ -409,4 +415,91 @@ void Verlet::force_clear()
       }
     }
   }
+}
+
+/* ----------------------------------------------------------------------
+   Analysis task
+------------------------------------------------------------------------- */
+
+static inline int _isBonded(double dist, double currR1, double currR2)
+{
+  if ((dist >= currR1) && (dist <= currR2))
+    return 1;
+
+  return 0;
+}
+
+typedef struct { long val; } __attribute((aligned(64))) counter_t;
+typedef struct { double x,y,z; } dbl3_t;
+
+void Verlet::analysis()
+{
+  dbl3_t * _noalias const x = (dbl3_t *) atom->x[0];
+  const long nlocal = atom->nlocal;
+  const double DEFAULT_R1 = 0.95;
+  const double DEFAULT_R2 = 1.3;
+  const int block_size = 1000;
+  int ret;
+
+  int nb = (nlocal + block_size - 1) / block_size;
+  int nthreads = nb * (nb + 1) / 2;
+
+  ABT_thread threads[nthreads];
+  task* ts[nthreads];
+  counter_t alignas(64) bond_counts[nthreads];
+  int tid = 0;
+
+  int ii, jj;
+  for (ii = 0; ii < nlocal - 1; ii += block_size) {
+    for (jj = ii + 1; jj < nlocal; jj += block_size) {
+      auto thread_fn = [&, ii, jj, tid]() {
+        int rank;
+        ABT_xstream_self_rank(&rank);
+        void *bp = logger_begin_tl(rank);
+
+        bond_counts[tid].val = 0;
+        int istart = ii;
+        int iend = (ii + block_size > nlocal - 1) ? nlocal - 1 : ii + block_size;
+        for (int i = istart; i < iend; i++) {
+          int jstart = (i > jj) ? i : jj;
+          int jend = (jj + block_size > nlocal) ? nlocal : jj + block_size;
+          for (int j = jstart; j < jend; j++) {
+            double dx = x[i].x - x[j].x;
+            double dy = x[i].y - x[j].y;
+            double dz = x[i].z - x[j].z;
+
+            double dist = sqrt(dx*dx + dy*dy + dz*dz);
+
+            if (_isBonded(dist, DEFAULT_R1, DEFAULT_R2)) {
+              bond_counts[tid].val++;
+            }
+          }
+        }
+
+        logger_end_tl(rank, bp, "analysis");
+      };
+
+      ts[tid] = new callable_task<decltype(thread_fn)>(thread_fn);
+      ABT_thread_attr attr;
+      ABT_thread_attr_create(&attr);
+      ABT_thread_attr_set_preemption_type(attr, PREEMPTION_TYPE);
+      ret = ABT_thread_create(g_pools[tid % g_num_xstreams],
+                              invoke,
+                              ts[tid],
+                              attr,
+                              &threads[tid]);
+      HANDLE_ERROR(ret, "ABT_thread_create");
+      tid++;
+    }
+  }
+
+  long bond_count = 0;
+  for (tid = 0; tid < nthreads; tid++) {
+    ret = ABT_thread_free(&threads[tid]);
+    HANDLE_ERROR(ret, "ABT_thread_free");
+    delete ts[tid];
+    bond_count += bond_counts[tid].val;
+  }
+
+  printf("bond: %ld / %ld\n", bond_count, nlocal * (nlocal - 1) / 2);
 }
