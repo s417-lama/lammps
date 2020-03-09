@@ -21,6 +21,7 @@ IntegrateStyle(verlet,Verlet)
 #define LMP_VERLET_H
 
 #include "integrate.h"
+#include "neigh_list.h"
 
 namespace LAMMPS_NS {
 
@@ -39,7 +40,7 @@ class Verlet : public Integrate {
   int torqueflag,extraflag;
 
   virtual void force_clear();
-  virtual void analysis();
+  virtual void analysis(NeighList* list);
 };
 
 }
