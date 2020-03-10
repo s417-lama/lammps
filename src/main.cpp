@@ -33,6 +33,7 @@
 
 #include "logger.h"
 #include "threads.h"
+#include "sched_prio.h"
 
 using namespace LAMMPS_NS;
 
@@ -79,17 +80,25 @@ int main(int argc, char **argv)
   for (int i = 0; i < g_num_xstreams; i++) {
     ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &g_pools[i]);
   }
+  ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &g_analysis_pool);
+
+  /* Create scheds */
+  ABT_sched *scheds = (ABT_sched *)malloc(sizeof(ABT_sched) * g_num_xstreams);
+  for (int i = 0; i < g_num_xstreams; i++) {
+    ABT_pool mypools[2];
+    mypools[0] = g_pools[i];
+    mypools[1] = g_analysis_pool;
+    ABT_sched_create(&sched_def, 2, mypools, ABT_SCHED_CONFIG_NULL, &scheds[i]);
+  }
 
   /* Primary ES creation */
   ABT_xstream *xstreams = (ABT_xstream *)malloc(sizeof(ABT_xstream) * g_num_xstreams);
   ABT_xstream_self(&xstreams[0]);
-  ABT_sched sched;
-  ABT_sched_create_basic(SCHED_TYPE, 1, &g_pools[0], ABT_SCHED_CONFIG_NULL, &sched);
-  ABT_xstream_set_main_sched(xstreams[0], sched);
+  ABT_xstream_set_main_sched(xstreams[0], scheds[0]);
 
   /* Secondary ES creation */
   for (int i = 1; i < g_num_xstreams; i++) {
-    ret = ABT_xstream_create_basic(SCHED_TYPE, 1, &g_pools[i], ABT_SCHED_CONFIG_NULL, &xstreams[i]);
+    ret = ABT_xstream_create(scheds[i], &xstreams[i]);
     HANDLE_ERROR(ret, "ABT_xstream_create");
   }
 
@@ -152,6 +161,11 @@ int main(int argc, char **argv)
     HANDLE_ERROR(ret, "ABT_xstream_free");
   }
 
+  /* Free scheds */
+  for (int i = 1; i < g_num_xstreams; i++) {
+    ABT_sched_free(&scheds[i]);
+  }
+
   /* Free barrier */
   ABT_barrier_free(&g_barrier);
 
@@ -161,6 +175,7 @@ int main(int argc, char **argv)
   ret = ABT_finalize();
   HANDLE_ERROR(ret, "ABT_finalize");
 
+  free(scheds);
   free(xstreams);
   free(g_pools);
 

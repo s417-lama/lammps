@@ -513,7 +513,7 @@ void Verlet::analysis(NeighList *list)
     ABT_thread_attr attr;
     ABT_thread_attr_create(&attr);
     ABT_thread_attr_set_preemption_type(attr, PREEMPTION_TYPE);
-    ret = ABT_thread_create(g_pools[tid % g_num_xstreams],
+    ret = ABT_thread_create(g_analysis_pool,
                             invoke,
                             ts[tid],
                             attr,

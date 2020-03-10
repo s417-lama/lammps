@@ -25,6 +25,7 @@
     }
 
 extern ABT_pool* g_pools;
+extern ABT_pool g_analysis_pool;
 extern int g_num_xstreams;
 extern int g_num_threads;
 extern ABT_barrier g_barrier;
