@@ -261,6 +261,8 @@ void Verlet::run(int n)
       comm->forward_comm();
       timer->stamp(Timer::COMM);
     } else {
+      analysis_wait();
+
       if (n_pre_exchange) {
         timer->stamp();
         modify->pre_exchange();
@@ -291,9 +293,8 @@ void Verlet::run(int n)
       }
     }
 
-    /* if (i % 50 == 0) { */
-    /*   analysis(force->pair->list); */
-    /* } */
+    analysis_wait();
+    analysis(force->pair->list);
 
     // force computations
     // important for pair to come before bonded contributions
@@ -354,6 +355,8 @@ void Verlet::run(int n)
       timer->stamp(Timer::OUTPUT);
     }
   }
+
+  analysis_wait();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -432,6 +435,14 @@ static inline int _isBonded(double dist, double currR1, double currR2)
 typedef struct { long val; } __attribute((aligned(64))) counter_t;
 typedef struct { double x,y,z; } dbl3_t;
 
+static constexpr int nthreads = 200;
+
+static dbl3_t * _noalias x_ = NULL;
+static ABT_thread threads[nthreads];
+static task* ts[nthreads];
+static counter_t alignas(64) bond_counts[nthreads];
+static int started = 0;
+
 void Verlet::analysis(NeighList *list)
 {
   dbl3_t * _noalias const x = (dbl3_t *) atom->x[0];
@@ -443,16 +454,29 @@ void Verlet::analysis(NeighList *list)
   const double DEFAULT_R2 = 1.3;
   int ret;
 
-  int nthreads = 200;
+  if (x_ == NULL) {
+    x_ = (dbl3_t *)malloc(sizeof(dbl3_t) * nlocal);
+  } else {
+    x_ = (dbl3_t *)realloc(x_, sizeof(dbl3_t) * nlocal);
+  }
 
-  ABT_thread threads[nthreads];
-  task* ts[nthreads];
-  counter_t alignas(64) bond_counts[nthreads];
-  int tid;
+#if defined (_OPENMP)
+#pragma omp parallel for default(none) schedule(static)
+  for (int i = 0; i < nlocal; i++)
+#else
+  parallel_for("copy", 0, nlocal, [&](int i) {
+#endif
+    x_[i].x = x[i].x;
+    x_[i].y = x[i].y;
+    x_[i].z = x[i].z;
+#if !defined (_OPENMP)
+  });
+#endif
+
   int nb = (nlocal + nthreads - 1) / nthreads;
 
-  for (tid = 0; tid < nthreads; tid++) {
-    auto thread_fn = [&, tid]() {
+  for (int tid = 0; tid < nthreads; tid++) {
+    auto thread_fn = [=]() {
       int rank;
       ABT_xstream_self_rank(&rank);
       void *bp = logger_begin_tl(rank);
@@ -469,9 +493,9 @@ void Verlet::analysis(NeighList *list)
           int j = jlist[jj];
           j &= NEIGHMASK;
           if (j < nlocal) {
-            double dx = x[i].x - x[j].x;
-            double dy = x[i].y - x[j].y;
-            double dz = x[i].z - x[j].z;
+            double dx = x_[i].x - x_[j].x;
+            double dy = x_[i].y - x_[j].y;
+            double dz = x_[i].z - x_[j].z;
 
             double dist = sqrt(dx*dx + dy*dy + dz*dz);
 
@@ -497,13 +521,22 @@ void Verlet::analysis(NeighList *list)
     HANDLE_ERROR(ret, "ABT_thread_create");
   }
 
-  long bond_count = 0;
-  for (tid = 0; tid < nthreads; tid++) {
-    ret = ABT_thread_free(&threads[tid]);
-    HANDLE_ERROR(ret, "ABT_thread_free");
-    delete ts[tid];
-    bond_count += bond_counts[tid].val;
-  }
+  started = 1;
+}
 
-  printf("bond: %ld / %ld\n", bond_count, nlocal * (nlocal - 1) / 2);
+void Verlet::analysis_wait()
+{
+  int ret;
+  if (started) {
+    long bond_count = 0;
+    for (int tid = 0; tid < nthreads; tid++) {
+      ret = ABT_thread_free(&threads[tid]);
+      HANDLE_ERROR(ret, "ABT_thread_free");
+      delete ts[tid];
+      bond_count += bond_counts[tid].val;
+    }
+    printf("bond: %ld\n", bond_count);
+
+    started = 0;
+  }
 }

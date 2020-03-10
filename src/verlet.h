@@ -41,6 +41,7 @@ class Verlet : public Integrate {
 
   virtual void force_clear();
   virtual void analysis(NeighList* list);
+  virtual void analysis_wait();
 };
 
 }
