@@ -109,6 +109,7 @@ int main(int argc, char **argv)
   ABT_mutex_create(&g_mutex);
 
 #if ENABLE_PREEMPTION
+  int num_pgroups = 56;
   ABT_preemption_group *preemption_groups = (ABT_preemption_group *)malloc(sizeof(ABT_preemption_group) * num_pgroups);
   ABT_preemption_timer_create_groups(num_pgroups, preemption_groups);
   for (int i = 0; i < num_pgroups; i++) {
@@ -116,6 +117,9 @@ int main(int argc, char **argv)
     int end   = (i + 1) * g_num_xstreams / num_pgroups;
     if (end > g_num_xstreams) end = g_num_xstreams;
     ABT_preemption_timer_set_xstreams(preemption_groups[i], end - begin, &xstreams[begin]);
+  }
+  for (int i = 0; i < num_pgroups; i++) {
+    ABT_preemption_timer_start(preemption_groups[i]);
   }
 #endif
 

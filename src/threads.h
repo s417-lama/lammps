@@ -7,15 +7,7 @@
 #include "logger.h"
 
 #ifndef ENABLE_PREEMPTION
-# define ENABLE_PREEMPTION 0
-#endif
-
-#define SCHED_TYPE ABT_SCHED_BASIC
-
-#ifndef PREEMPTION_TYPE
-# define PREEMPTION_TYPE ABT_PREEMPTION_YIELD
-/* # define PREEMPTION_TYPE ABT_PREEMPTION_NEW_ES */
-/* # define PREEMPTION_TYPE ABT_PREEMPTION_DISABLED */
+# define ENABLE_PREEMPTION 1
 #endif
 
 #define HANDLE_ERROR(ret, msg)                        \
@@ -72,7 +64,7 @@ static inline void parallel_for(char* name, int begin, int end, Func func)
     ts[i] = new callable_task<decltype(thread_fn)>(thread_fn);
     ABT_thread_attr attr;
     ABT_thread_attr_create(&attr);
-    ABT_thread_attr_set_preemption_type(attr, PREEMPTION_TYPE);
+    ABT_thread_attr_set_preemption_type(attr, ABT_PREEMPTION_DISABLED);
     ret = ABT_thread_create(g_pools[i % g_num_xstreams],
                             invoke,
                             ts[i],
@@ -112,7 +104,7 @@ static inline void parallel_region(char *name, Func func)
     ts[i] = new callable_task<decltype(thread_fn)>(thread_fn);
     ABT_thread_attr attr;
     ABT_thread_attr_create(&attr);
-    ABT_thread_attr_set_preemption_type(attr, PREEMPTION_TYPE);
+    ABT_thread_attr_set_preemption_type(attr, ABT_PREEMPTION_DISABLED);
     ret = ABT_thread_create(g_pools[i % g_num_xstreams],
                             invoke,
                             ts[i],

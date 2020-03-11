@@ -1,6 +1,7 @@
 #pragma once
 
 #include <abt.h>
+#include "logger.h"
 
 static int sched_init(ABT_sched sched, ABT_sched_config config)
 {
@@ -20,6 +21,9 @@ static void sched_run(ABT_sched sched)
   pools = (ABT_pool *)malloc(num_pools * sizeof(ABT_pool));
   ABT_sched_get_pools(sched, num_pools, 0, pools);
 
+  int rank;
+  ABT_xstream_self_rank(&rank);
+
   while (1) {
     ABT_pool_pop(pools[0], &unit);
     if (unit != ABT_UNIT_NULL) {
@@ -27,7 +31,11 @@ static void sched_run(ABT_sched sched)
     } else {
       ABT_pool_pop(pools[1], &unit);
       if (unit != ABT_UNIT_NULL) {
+        void *bp = logger_begin_tl(rank);
+
         ABT_xstream_run_unit(unit, pools[1]);
+
+        logger_end_tl(rank, bp, "analysis");
       }
     }
 

@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 /* #define MLOG_DISABLE_CHECK_BUFFER_SIZE 1 */
-/* #define MLOG_DISABLE_REALLOC_BUFFER    1 */
+#define MLOG_DISABLE_REALLOC_BUFFER    1
 #include "mlog/mlog.h"
 
 #ifndef LOGGER_ENABLE

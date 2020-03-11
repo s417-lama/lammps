@@ -477,14 +477,11 @@ void Verlet::analysis(NeighList *list)
 
   for (int tid = 0; tid < nthreads; tid++) {
     auto thread_fn = [=]() {
-      int rank;
-      ABT_xstream_self_rank(&rank);
-      void *bp = logger_begin_tl(rank);
-
       int ifrom = tid * nb;
       int ito = ((tid + 1) * nb > nlocal) ? nlocal : (tid + 1) * nb;
 
       bond_counts[tid].val = 0;
+      for (int a = 0; a < 10; a++)
       for (int ii = ifrom; ii < ito; ii++) {
         const int i = ilist[ii];
         const int * _noalias const jlist = firstneigh[i];
@@ -505,14 +502,12 @@ void Verlet::analysis(NeighList *list)
           }
         }
       }
-
-      logger_end_tl(rank, bp, "analysis");
     };
 
     ts[tid] = new callable_task<decltype(thread_fn)>(thread_fn);
     ABT_thread_attr attr;
     ABT_thread_attr_create(&attr);
-    ABT_thread_attr_set_preemption_type(attr, PREEMPTION_TYPE);
+    ABT_thread_attr_set_preemption_type(attr, ABT_PREEMPTION_YIELD);
     ret = ABT_thread_create(g_analysis_pool,
                             invoke,
                             ts[tid],
