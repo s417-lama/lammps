@@ -303,6 +303,9 @@ void LAMMPS_NS::data_reduce_thr(double *dall, int nall, int nthreads, int ndim, 
 #pragma omp barrier
 #else
   abt_barrier();
+  int rank;
+  ABT_xstream_self_rank(&rank);
+  void *bp = logger_begin_tl(rank);
 #endif
   {
     const int nvals = ndim*nall;
@@ -377,4 +380,7 @@ void LAMMPS_NS::data_reduce_thr(double *dall, int nall, int nthreads, int ndim, 
     }
 #endif
   }
+#if !defined(_OPENMP)
+  logger_end_tl(rank, bp, "reduce");
+#endif
 }

@@ -33,6 +33,14 @@
 
 #include "threads.h"
 
+#ifndef ENABLE_ANALYSIS
+# define ENABLE_ANALYSIS 1
+#endif
+
+#ifndef ANALYSIS_ASYNC
+# define ANALYSIS_ASYNC 1
+#endif
+
 using namespace LAMMPS_NS;
 
 /* ---------------------------------------------------------------------- */
@@ -294,7 +302,12 @@ void Verlet::run(int n)
     }
 
     analysis_wait();
+#if ENABLE_ANALYSIS
     analysis(force->pair->list);
+#endif
+#if !ANALYSIS_ASYNC
+    analysis_wait();
+#endif
 
     // force computations
     // important for pair to come before bonded contributions
@@ -435,7 +448,7 @@ static inline int _isBonded(double dist, double currR1, double currR2)
 typedef struct { long val; } __attribute((aligned(64))) counter_t;
 typedef struct { double x,y,z; } dbl3_t;
 
-static constexpr int nthreads = 200;
+static constexpr int nthreads = 28;
 
 static dbl3_t * _noalias x_ = NULL;
 static ABT_thread threads[nthreads];
@@ -461,8 +474,9 @@ void Verlet::analysis(NeighList *list)
   }
 
 #if defined (_OPENMP)
-#pragma omp parallel for default(none) schedule(static)
-  for (int i = 0; i < nlocal; i++)
+  int i;
+#pragma omp parallel for default(none) schedule(static) shared(x_, x)
+  for (i = 0; i < nlocal; i++)
 #else
   parallel_for("copy", 0, nlocal, [&](int i) {
 #endif
@@ -481,7 +495,7 @@ void Verlet::analysis(NeighList *list)
       int ito = ((tid + 1) * nb > nlocal) ? nlocal : (tid + 1) * nb;
 
       bond_counts[tid].val = 0;
-      for (int a = 0; a < 10; a++)
+      /* for (int a = 0; a < 10; a++) */
       for (int ii = ifrom; ii < ito; ii++) {
         const int i = ilist[ii];
         const int * _noalias const jlist = firstneigh[i];
