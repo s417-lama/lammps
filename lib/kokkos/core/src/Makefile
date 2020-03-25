@@ -36,6 +36,10 @@ ifeq ($(KOKKOS_INTERNAL_USE_QTHREADS), 1)
   CONDITIONAL_COPIES += copy-qthreads
 endif
 
+ifeq ($(KOKKOS_INTERNAL_USE_ARGOBOTS), 1)
+  CONDITIONAL_COPIES += copy-argobots
+endif
+
 ifeq ($(KOKKOS_INTERNAL_USE_OPENMP), 1)
   CONDITIONAL_COPIES += copy-openmp
 endif
@@ -90,6 +94,10 @@ copy-threads: mkdir
 copy-qthreads: mkdir
 	mkdir -p $(PREFIX)/include/Qthreads
 	$(CP) $(COPY_FLAG) $(KOKKOS_HEADERS_QTHREADS) $(PREFIX)/include/Qthreads
+
+copy-argobots: mkdir
+	mkdir -p $(PREFIX)/include/Argobots
+	$(CP) $(COPY_FLAG) $(KOKKOS_HEADERS_ARGOBOTS) $(PREFIX)/include/Argobots
 
 copy-openmp: mkdir
 	mkdir -p $(PREFIX)/include/OpenMP

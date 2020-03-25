@@ -50,6 +50,7 @@
 #include <cstdlib>
 #include <stack>
 #include <cerrno>
+#include "logger.h"
 
 //----------------------------------------------------------------------------
 
@@ -59,7 +60,11 @@ bool g_show_warnings = true;
 std::stack<std::function<void()> > finalize_hooks;
 }
 
-namespace Kokkos { namespace Impl { namespace {
+namespace Kokkos {
+
+mlog_data_t g_md;
+
+namespace Impl { namespace {
 
 bool is_unsigned_int(const char* str)
 {
@@ -125,6 +130,20 @@ setenv("MEMKIND_HBW_NODES", "1", 0);
   }
   else {
     //std::cout << "Kokkos::initialize() fyi: OpenMP enabled but not initialized" << std::endl ;
+  }
+#endif
+
+#if defined( KOKKOS_ENABLE_ARGOBOTS )
+  if( std::is_same< Kokkos::Argobots , Kokkos::DefaultExecutionSpace >::value ||
+      std::is_same< Kokkos::Argobots , Kokkos::HostSpace::execution_space >::value ) {
+#ifdef KOKKOS_ENABLE_DEPRECATED_CODE
+    Kokkos::Argobots::initialize();
+#else
+    Kokkos::Argobots::impl_initialize();
+#endif
+  }
+  else {
+    //std::cout << "Kokkos::initialize() fyi: Argobots enabled but not initialized" << std::endl ;
   }
 #endif
 
@@ -312,6 +331,20 @@ void finalize_internal( const bool all_spaces = false )
 #else
     if(Kokkos::OpenMP::impl_is_initialized())
       Kokkos::OpenMP::impl_finalize();
+#endif
+  }
+#endif
+
+#if defined( KOKKOS_ENABLE_ARGOBOTS )
+  if( std::is_same< Kokkos::Argobots , Kokkos::DefaultExecutionSpace >::value ||
+      std::is_same< Kokkos::Argobots , Kokkos::HostSpace::execution_space >::value ||
+      all_spaces ) {
+#ifdef KOKKOS_ENABLE_DEPRECATED_CODE
+    if(Kokkos::Argobots::is_initialized())
+      Kokkos::Argobots::finalize();
+#else
+    if(Kokkos::Argobots::impl_is_initialized())
+      Kokkos::Argobots::impl_finalize();
 #endif
   }
 #endif
@@ -758,6 +791,12 @@ void print_configuration( std::ostream & out , const bool detail )
 #else
   msg << "no" << std::endl;
 #endif
+  msg << "  KOKKOS_ENABLE_ARGOBOTS: ";
+#ifdef KOKKOS_ENABLE_ARGOBOTS
+  msg << "yes" << std::endl;
+#else
+  msg << "no" << std::endl;
+#endif
   msg << "  KOKKOS_ENABLE_SERIAL: ";
 #ifdef KOKKOS_ENABLE_SERIAL
   msg << "yes" << std::endl;
@@ -787,6 +826,12 @@ void print_configuration( std::ostream & out , const bool detail )
 #endif
   msg << "  KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_QTHREADS: ";
 #ifdef KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_QTHREADS
+  msg << "yes" << std::endl;
+#else
+  msg << "no" << std::endl;
+#endif
+  msg << "  KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_ARGOBOTS: ";
+#ifdef KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_ARGOBOTS
   msg << "yes" << std::endl;
 #else
   msg << "no" << std::endl;
@@ -1002,6 +1047,9 @@ void print_configuration( std::ostream & out , const bool detail )
 #endif
 #ifdef KOKKOS_ENABLE_QTHREADS
   Qthreads::print_configuration(msg, detail);
+#endif
+#ifdef KOKKOS_ENABLE_ARGOBOTS
+  Argobots::print_configuration(msg, detail);
 #endif
 #ifdef KOKKOS_ENABLE_SERIAL
   Serial::print_configuration(msg, detail);

@@ -245,6 +245,13 @@ struct AtomicDup<HALFTHREAD,Kokkos::OpenMP> {
 };
 #endif
 
+#ifdef KOKKOS_ENABLE_ARGOBOTS
+template<>
+struct AtomicDup<HALFTHREAD,Kokkos::Argobots> {
+  enum {value = Kokkos::Experimental::ScatterAtomic};
+};
+#endif
+
 #ifdef KOKKOS_ENABLE_THREADS
 template<>
 struct AtomicDup<HALFTHREAD,Kokkos::Threads> {
@@ -267,6 +274,13 @@ struct NeedDup {
 #ifdef KOKKOS_ENABLE_OPENMP
 template<>
 struct NeedDup<HALFTHREAD,Kokkos::OpenMP> {
+  enum {value = Kokkos::Experimental::ScatterDuplicated};
+};
+#endif
+
+#ifdef KOKKOS_ENABLE_ARGOBOTS
+template<>
+struct NeedDup<HALFTHREAD,Kokkos::Argobots> {
   enum {value = Kokkos::Experimental::ScatterDuplicated};
 };
 #endif

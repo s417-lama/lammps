@@ -11,10 +11,16 @@ cd -P $(dirname $0)/src
 # # numactl -iall mpirun ./lmp_omp -in ../bench/in.lj -var x 4 -var y 6 -var z 4 -sf omp
 # mpirun ./lmp_omp -in ../bench/in.lj -var x 4 -var y 6 -var z 4 -sf omp
 
-export LAMMPS_ABT_NUM_XSTREAMS=8
-export LAMMPS_ABT_NUM_THREADS=8
-# mpirun ./lmp_mpi -in ../bench/in.lj -var x 4 -var y 6 -var z 8 -sf omp
-# numactl -iall mpirun ./lmp_mpi -in ../bench/in.lj -var x 4 -var y 6 -var z 8 -sf omp
-# numactl -iall mpirun ./lmp_mpi -in ../bench/in.lj -var x 4 -var y 6 -var z 4 -sf omp
+# export LAMMPS_ABT_NUM_XSTREAMS=56
+# export LAMMPS_ABT_NUM_THREADS=56
+# # mpirun ./lmp_mpi -in ../bench/in.lj -var x 4 -var y 6 -var z 8 -sf omp
+# # numactl -iall mpirun ./lmp_mpi -in ../bench/in.lj -var x 4 -var y 6 -var z 8 -sf omp
+# # numactl -iall mpirun ./lmp_mpi -in ../bench/in.lj -var x 4 -var y 6 -var z 4 -sf omp
 # mpirun ./lmp_mpi -in ../bench/in.lj -var x 4 -var y 6 -var z 4 -sf omp
-mpirun ./lmp_mpi -in ../bench/in.lj -var x 8 -var y 8 -var z 8 -sf omp
+# # mpirun ./lmp_mpi -in ../bench/in.lj -var x 8 -var y 8 -var z 8 -sf omp
+
+export ABT_SET_AFFINITY=0
+export LAMMPS_ABT_NUM_XSTREAMS=56
+export LAMMPS_ABT_NUM_THREADS=56
+# mpirun ./lmp_kokkos_omp -in ../bench/in.lj -var x 4 -var y 6 -var z 4 -k on t 56 -sf kk
+numactl -iall mpirun ./lmp_kokkos_omp -in ../bench/in.lj -var x 4 -var y 6 -var z 4 -k on t 56 -sf kk -pk kokkos newton off neigh full

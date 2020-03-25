@@ -100,6 +100,10 @@ class Serial;    ///< Execution space main process on CPU.
 class Qthreads;  ///< Execution space with Qthreads back-end.
 #endif
 
+#if defined( KOKKOS_ENABLE_ARGOBOTS )
+class Argobots;  ///< Execution space with Argobots back-end.
+#endif
+
 #if defined( KOKKOS_ENABLE_HPX )
 namespace Experimental {
 class HPX;  ///< Execution space with HPX back-end.
@@ -160,6 +164,8 @@ namespace Kokkos {
   typedef OpenMP DefaultExecutionSpace;
 #elif defined( KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_THREADS )
   typedef Threads DefaultExecutionSpace;
+#elif defined( KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_ARGOBOTS )
+  typedef Argobots DefaultExecutionSpace;
 //#elif defined( KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_QTHREADS )
 //  typedef Qthreads DefaultExecutionSpace;
 #elif defined( KOKKOS_ENABLE_DEFAULT_DEVICE_TYPE_HPX )
@@ -182,6 +188,8 @@ namespace Kokkos {
   typedef OpenMP DefaultHostExecutionSpace;
 #elif defined( KOKKOS_ENABLE_THREADS )
   typedef Threads DefaultHostExecutionSpace;
+#elif defined( KOKKOS_ENABLE_ARGOBOTS )
+  typedef Argobots DefaultHostExecutionSpace;
 //#elif defined( KOKKOS_ENABLE_QTHREADS )
 //  typedef Qthreads DefaultHostExecutionSpace;
 #elif defined( KOKKOS_ENABLE_HPX )

@@ -2,24 +2,35 @@
 
 SHELL = /bin/sh
 
+ABT_PATH=$(realpath ../../myopt/argobots)
+
 # ---------------------------------------------------------------------
 # compiler/linker settings
 # specify flags and libraries needed for your compiler
+#
+ifeq ($(DEBUG), 1)
+	CCFLAGS = -g -O0
+else
+	CCFLAGS = -g -O3
+endif
 
 CC =		mpicxx
-CCFLAGS =	-g -O3
+CCFLAGS += -std=c++11
+CCFLAGS += -I../ -I$(ABT_PATH)/include
+CCFLAGS += -DLOGGER_ENABLE=1
 SHFLAGS =	-fPIC
 DEPFLAGS =	-M
 
 LINK =		mpicxx
-LINKFLAGS =	-g -O3
-LIB = 
+LINKFLAGS =	-g -O3 -L$(ABT_PATH)/lib -Wl,-R$(ABT_PATH)/lib
+LIB = -labt
 SIZE =		size
 
 ARCHIVE =	ar
 ARFLAGS =	-rc
 SHLIBFLAGS =	-shared
-KOKKOS_DEVICES = OpenMP
+# KOKKOS_DEVICES = OpenMP
+KOKKOS_DEVICES = Argobots
 
 # ---------------------------------------------------------------------
 # LAMMPS-specific settings, all OPTIONAL

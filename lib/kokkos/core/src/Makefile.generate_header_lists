@@ -18,6 +18,10 @@ ifeq ($(KOKKOS_INTERNAL_USE_QTHREADS), 1)
   KOKKOS_HEADERS_QTHREADS += $(wildcard $(KOKKOS_PATH)/core/src/Qthreads/*.hpp)
 endif
 
+ifeq ($(KOKKOS_INTERNAL_USE_ARGOBOTS), 1)
+  KOKKOS_HEADERS_ARGOBOTS += $(wildcard $(KOKKOS_PATH)/core/src/Argobots/*.hpp)
+endif
+
 ifeq ($(KOKKOS_INTERNAL_USE_OPENMP), 1)
   KOKKOS_HEADERS_OPENMP += $(wildcard $(KOKKOS_PATH)/core/src/OpenMP/*.hpp)
 endif

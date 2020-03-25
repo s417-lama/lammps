@@ -3,12 +3,14 @@
 #include <stdio.h>
 
 /* #define MLOG_DISABLE_CHECK_BUFFER_SIZE 1 */
-#define MLOG_DISABLE_REALLOC_BUFFER    1
+/* #define MLOG_DISABLE_REALLOC_BUFFER    1 */
 #include "mlog/mlog.h"
 
 #ifndef LOGGER_ENABLE
 # define LOGGER_ENABLE 0
 #endif
+
+namespace Kokkos {
 
 extern mlog_data_t g_md;
 
@@ -49,4 +51,6 @@ static inline void logger_end_tl(int rank, void* bp, char* event) {};
 
 static inline void logger_clear() {
   mlog_clear_all(&g_md);
+}
+
 }

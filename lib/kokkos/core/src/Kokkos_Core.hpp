@@ -66,6 +66,10 @@
 #include <Kokkos_Qthreads.hpp>
 #endif
 
+#if defined( KOKKOS_ENABLE_ARGOBOTS )
+#include <Kokkos_Argobots.hpp>
+#endif
+
 #if defined( KOKKOS_ENABLE_HPX )
 #include <Kokkos_HPX.hpp>
 #endif
