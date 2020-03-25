@@ -390,6 +390,8 @@ void VerletKokkos::run(int n)
       timer->stamp(Timer::NEIGH);
     }
 
+    analysis((NeighListKokkos<LMPDeviceType>*)force->pair->list);
+
     // force computations
     // important for pair to come before bonded contributions
     // since some bonded potentials tally pairwise energy/virial
@@ -621,5 +623,3 @@ void VerletKokkos::force_clear()
     }
   }
 }
-
-
