@@ -54,6 +54,8 @@
 
 #include <KokkosExp_MDRangePolicy.hpp>
 
+#include "logger.h"
+
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 
@@ -150,10 +152,15 @@ public:
           range = is_dynamic ? data.get_work_stealing_chunk()
                              : data.get_work_partition();
 
+          int rank = omp_get_thread_num();
+          void *bp = logger_begin_tl(rank);
+
           ParallelFor::template
             exec_range< WorkTag >( m_functor
                 , range.first  + m_policy.begin()
                 , range.second + m_policy.begin() );
+
+          logger_end_tl(rank, bp, "simulation");
 
         } while ( is_dynamic && 0 <= range.first );
       }
@@ -249,10 +256,15 @@ public:
           range = is_dynamic ? data.get_work_stealing_chunk()
                              : data.get_work_partition();
 
+          int rank = omp_get_thread_num();
+          void *bp = logger_begin_tl(rank);
+
           ParallelFor::exec_range( m_mdr_policy
                                  , m_functor
                                  , range.first  + m_policy.begin()
                                  , range.second + m_policy.begin() );
+
+          logger_end_tl(rank, bp, "simulation");
 
         } while ( is_dynamic && 0 <= range.first );
       }
@@ -385,11 +397,16 @@ public:
           range = is_dynamic ? data.get_work_stealing_chunk()
                              : data.get_work_partition();
 
+          int rank = omp_get_thread_num();
+          void *bp = logger_begin_tl(rank);
+
           ParallelReduce::template
             exec_range< WorkTag >( m_functor
                                  , range.first  + m_policy.begin()
                                  , range.second + m_policy.begin()
                                  , update );
+
+          logger_end_tl(rank, bp, "simulation");
 
         } while ( is_dynamic && 0 <= range.first );
       }
@@ -554,10 +571,15 @@ public:
           range = is_dynamic ? data.get_work_stealing_chunk()
                              : data.get_work_partition();
 
+          int rank = omp_get_thread_num();
+          void *bp = logger_begin_tl(rank);
+
           ParallelReduce::exec_range ( m_mdr_policy, m_functor
                                      , range.first  + m_policy.begin()
                                      , range.second + m_policy.begin()
                                      , update );
+
+          logger_end_tl(rank, bp, "simulation");
 
         } while ( is_dynamic && 0 <= range.first );
       }
@@ -1032,9 +1054,14 @@ public:
             range = is_dynamic ? data.get_work_stealing_chunk()
                                : data.get_work_partition();
 
+            int rank = omp_get_thread_num();
+            void *bp = logger_begin_tl(rank);
+
             ParallelFor::template exec_team< WorkTag >
               ( m_functor , data
               , range.first , range.second , m_policy.league_size() );
+
+            logger_end_tl(rank, bp, "simulation");
 
           } while ( is_dynamic && 0 <= range.first );
         }
@@ -1201,9 +1228,14 @@ public:
             range = is_dynamic ? data.get_work_stealing_chunk()
                                : data.get_work_partition();
 
+            int rank = omp_get_thread_num();
+            void *bp = logger_begin_tl(rank);
+
             ParallelReduce::template exec_team< WorkTag >
               ( m_functor , data , update
               , range.first , range.second , m_policy.league_size() );
+
+            logger_end_tl(rank, bp, "simulation");
 
           } while ( is_dynamic && 0 <= range.first );
         } else {

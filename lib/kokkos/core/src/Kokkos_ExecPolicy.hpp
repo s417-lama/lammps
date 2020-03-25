@@ -272,9 +272,11 @@ public:
         if ( part_size ) {
 
           // Split evenly among partitions, then round up to the granularity.
+          /* const member_type work_part = */
+          /*   ( ( ( ( range.end() - range.begin() ) + ( part_size - 1 ) ) / part_size ) */
+          /*     + range.m_granularity_mask ) & ~member_type(range.m_granularity_mask); */
           const member_type work_part =
-            ( ( ( ( range.end() - range.begin() ) + ( part_size - 1 ) ) / part_size )
-              + range.m_granularity_mask ) & ~member_type(range.m_granularity_mask);
+            ( ( range.end() - range.begin() ) + ( part_size - 1 ) ) / part_size;
 
           m_begin = range.begin() + work_part * part_rank ;
           m_end   = m_begin       + work_part ;

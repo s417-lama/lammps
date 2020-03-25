@@ -572,6 +572,7 @@ void CommBrick::reverse_comm()
    this routine called before every reneighboring
    for triclinic, atoms must be in lamda coords (0-1) before exchange is called
 ------------------------------------------------------------------------- */
+#include "kokkos.h"
 
 void CommBrick::exchange()
 {

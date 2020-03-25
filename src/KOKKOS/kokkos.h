@@ -17,6 +17,7 @@
 #include "pointers.h"
 #include "kokkos_type.h"
 #include "pair_kokkos.h"
+#include "logger.h"
 
 namespace LAMMPS_NS {
 

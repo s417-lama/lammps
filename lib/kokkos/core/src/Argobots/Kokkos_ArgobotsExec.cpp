@@ -101,14 +101,14 @@ static void sched_run(ABT_sched sched)
     if (unit != ABT_UNIT_NULL) {
       ABT_xstream_run_unit(unit, pools[0]);
     } else {
-      ABT_pool_pop(pools[1], &unit);
-      if (unit != ABT_UNIT_NULL) {
-        void *bp = logger_begin_tl(rank);
+      /* ABT_pool_pop(pools[1], &unit); */
+      /* if (unit != ABT_UNIT_NULL) { */
+      /*   void *bp = logger_begin_tl(rank); */
 
-        ABT_xstream_run_unit(unit, pools[1]);
+      /*   ABT_xstream_run_unit(unit, pools[1]); */
 
-        logger_end_tl(rank, bp, "analysis");
-      }
+      /*   logger_end_tl(rank, bp, "analysis"); */
+      /* } */
     }
 
     if (++work_count >= event_freq) {

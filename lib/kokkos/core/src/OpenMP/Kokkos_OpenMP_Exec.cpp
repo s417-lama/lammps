@@ -57,6 +57,9 @@
 #include <impl/Kokkos_CPUDiscovery.hpp>
 #include <impl/Kokkos_Profiling_Interface.hpp>
 
+#include <mpi.h>
+#include "logger.h"
+
 
 namespace Kokkos {
 namespace Impl {
@@ -346,6 +349,8 @@ void OpenMP::impl_initialize( int thread_count )
       omp_set_num_threads(Impl::g_openmp_hardware_max_threads);
     }
 
+    logger_init(Impl::g_openmp_hardware_max_threads);
+
     // setup thread local
     #pragma omp parallel num_threads(Impl::g_openmp_hardware_max_threads)
     {
@@ -435,6 +440,15 @@ void OpenMP::impl_finalize()
   #if defined(KOKKOS_ENABLE_PROFILING)
     Kokkos::Profiling::finalize();
   #endif
+
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+  char filename[20];
+  sprintf(filename, "mlog_%d.ignore", rank);
+  FILE *fp = fopen(filename, "w+");
+  logger_flush(fp);
+  fclose(fp);
 }
 
 //----------------------------------------------------------------------------

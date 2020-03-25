@@ -354,6 +354,7 @@ void VerletKokkos::run(int n)
         modify->pre_exchange();
         timer->stamp(Timer::MODIFY);
       }
+
       // debug
       //atomKK->sync(Host,ALL_MASK);
       //atomKK->modified(Host,ALL_MASK);
