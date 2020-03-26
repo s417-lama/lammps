@@ -29,6 +29,12 @@ IntegrateStyle(verlet/kk/host,VerletKokkos)
 #include "memory_kokkos.h"
 #include <mpi.h>
 
+#define HANDLE_ERROR(ret, msg)                        \
+    if (ret != ABT_SUCCESS) {                         \
+        fprintf(stderr, "ERROR[%d]: %s\n", ret, msg); \
+        exit(EXIT_FAILURE);                           \
+    }
+
 namespace LAMMPS_NS {
 
 typedef struct { long val; } __attribute((aligned(64))) counter_t;

@@ -27,12 +27,6 @@
 #include "exceptions.h"
 #endif
 
-#if defined(_OPENMP)
-#include <omp.h>
-#endif
-
-#include "threads.h"
-
 using namespace LAMMPS_NS;
 
 /* ----------------------------------------------------------------------

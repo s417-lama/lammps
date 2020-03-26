@@ -40,8 +40,6 @@ class Verlet : public Integrate {
   int torqueflag,extraflag;
 
   virtual void force_clear();
-  virtual void analysis(NeighList* list);
-  virtual void analysis_wait();
 };
 
 }
