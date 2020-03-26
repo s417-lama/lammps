@@ -184,6 +184,34 @@ void VerletKokkos::setup(int flag)
   output->setup(flag);
   lmp->kokkos->auto_sync = 1;
   update->setupflag = 0;
+
+  char *s;
+  s = getenv("LAMMPS_ENABLE_ANALYSIS");
+  if (s) {
+    enable_analysis = atoi(s);
+  } else {
+    enable_analysis = 0;
+  }
+
+  s = getenv("LAMMPS_ASYNC_ANALYSIS");
+  if (s) {
+    async_analysis = atoi(s);
+  } else {
+    async_analysis = 0;
+  }
+
+  s = getenv("LAMMPS_NUM_ANALYSIS_THREADS");
+  if (s) {
+    n_analysis_threads = atoi(s);
+  } else {
+    n_analysis_threads = Kokkos::Impl::g_num_threads;
+  }
+
+  analysis_started = 0;
+
+  threads = (ABT_thread*)malloc(sizeof(ABT_thread) * n_analysis_threads);
+  ts = (task**)malloc(sizeof(task*) * n_analysis_threads);
+  posix_memalign((void**)&bond_counts, 64, sizeof(counter_t) * n_analysis_threads);
 }
 
 /* ----------------------------------------------------------------------
@@ -345,6 +373,7 @@ void VerletKokkos::run(int n)
       comm->forward_comm();
       timer->stamp(Timer::COMM);
     } else {
+      analysis_wait();
       // added debug
       //atomKK->sync(Host,ALL_MASK);
       //atomKK->modified(Host,ALL_MASK);
@@ -390,7 +419,13 @@ void VerletKokkos::run(int n)
       timer->stamp(Timer::NEIGH);
     }
 
-    analysis((NeighListKokkos<LMPDeviceType>*)force->pair->list);
+    analysis_wait();
+    if (enable_analysis) {
+      analysis((NeighListKokkos<LMPDeviceType>*)force->pair->list);
+    }
+    if (!async_analysis) {
+      analysis_wait();
+    }
 
     // force computations
     // important for pair to come before bonded contributions
@@ -565,6 +600,12 @@ void VerletKokkos::run(int n)
       timer->stamp(Timer::OUTPUT);
     }
   }
+
+  analysis_wait();
+
+  free(threads);
+  free(ts);
+  free(bond_counts);
 
   atomKK->sync(Host,ALL_MASK);
   lmp->kokkos->auto_sync = 1;

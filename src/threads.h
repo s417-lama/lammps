@@ -21,23 +21,6 @@
 /* extern ABT_barrier g_barrier; */
 /* extern ABT_mutex g_mutex; */
 
-struct task {
-  virtual void * execute() = 0;
-};
-
-template<typename Func>
-struct callable_task : task {
-  Func func;
-  callable_task(Func func_) : func(func_) {}
-  void* execute() { func(); return NULL; }
-};
-
-static void invoke(void *arg_)
-{
-  task *arg = (task *)arg_;
-  arg->execute();
-}
-
 template<typename Func>
 static inline void parallel_for(char* name, int begin, int end, Func func)
 {

@@ -62,10 +62,6 @@
 
 #include <abt.h>
 
-#ifndef ENABLE_PREEMPTION
-# define ENABLE_PREEMPTION 0
-#endif
-
 #define HANDLE_ERROR(ret, msg)                        \
     if (ret != ABT_SUCCESS) {                         \
         fprintf(stderr, "ERROR[%d]: %s\n", ret, msg); \
@@ -78,7 +74,7 @@
 namespace Kokkos { namespace Impl {
 
 extern ABT_pool* g_pools;
-extern ABT_pool g_analysis_pool;
+extern ABT_pool* g_analysis_pools;
 extern int g_num_xstreams;
 extern int g_num_threads;
 extern int g_num_pgroups;
@@ -86,6 +82,8 @@ extern ABT_barrier g_barrier;
 extern ABT_mutex g_mutex;
 extern ABT_xstream* g_xstreams;
 extern ABT_sched* g_scheds;
+extern ABT_preemption_group* g_preemption_groups;
+extern int g_enable_preemption;
 
 //----------------------------------------------------------------------------
 

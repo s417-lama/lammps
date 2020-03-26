@@ -66,7 +66,7 @@ namespace Kokkos {
 namespace Impl {
 
 ABT_pool* g_pools;
-ABT_pool g_analysis_pool;
+ABT_pool* g_analysis_pools;
 int g_num_xstreams;
 int g_num_threads;
 int g_num_pgroups;
@@ -74,6 +74,8 @@ ABT_barrier g_barrier;
 ABT_mutex g_mutex;
 ABT_xstream* g_xstreams;
 ABT_sched* g_scheds;
+ABT_preemption_group* g_preemption_groups;
+int g_enable_preemption;
 
 static int sched_init(ABT_sched sched, ABT_sched_config config)
 {
@@ -88,6 +90,7 @@ static void sched_run(ABT_sched sched)
   ABT_unit unit;
   ABT_bool stop;
   int event_freq = 100;
+  unsigned seed = time(NULL);
 
   ABT_sched_get_num_pools(sched, &num_pools);
   pools = (ABT_pool *)malloc(num_pools * sizeof(ABT_pool));
@@ -101,14 +104,26 @@ static void sched_run(ABT_sched sched)
     if (unit != ABT_UNIT_NULL) {
       ABT_xstream_run_unit(unit, pools[0]);
     } else {
-      /* ABT_pool_pop(pools[1], &unit); */
-      /* if (unit != ABT_UNIT_NULL) { */
-      /*   void *bp = logger_begin_tl(rank); */
+      /* Pop an analysis task */
+      ABT_pool_pop(pools[1], &unit);
+      if (unit != ABT_UNIT_NULL) {
+        void *bp = logger_begin_tl(rank);
 
-      /*   ABT_xstream_run_unit(unit, pools[1]); */
+        ABT_xstream_run_unit(unit, pools[1]);
 
-      /*   logger_end_tl(rank, bp, "analysis"); */
-      /* } */
+        logger_end_tl(rank, bp, "analysis");
+      } else if (num_pools > 2) {
+        /* Steal an analysis task from other pools */
+        int target = (num_pools == 3) ? 1 : (rand_r(&seed) % (num_pools-2) + 1);
+        ABT_pool_pop(pools[target], &unit);
+        if (unit != ABT_UNIT_NULL) {
+          void *bp = logger_begin_tl(rank);
+
+          ABT_xstream_run_unit(unit, pools[target]);
+
+          logger_end_tl(rank, bp, "analysis");
+        }
+      }
     }
 
     if (++work_count >= event_freq) {
@@ -166,6 +181,13 @@ void Argobots::impl_initialize()
     Impl::g_num_threads = 1;
   }
 
+  s = getenv("LAMMPS_ABT_ENABLE_PREEMPTION");
+  if (s) {
+    Impl::g_enable_preemption = atoi(s);
+  } else {
+    Impl::g_enable_preemption = 0;
+  }
+
   logger_init(Impl::g_num_xstreams);
 
   int ret;
@@ -173,18 +195,21 @@ void Argobots::impl_initialize()
 
   /* Create pools */
   Impl::g_pools = (ABT_pool *)malloc(sizeof(ABT_pool) * Impl::g_num_xstreams);
+  Impl::g_analysis_pools = (ABT_pool *)malloc(sizeof(ABT_pool) * Impl::g_num_xstreams);
   for (int i = 0; i < Impl::g_num_xstreams; i++) {
     ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &Impl::g_pools[i]);
+    ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &Impl::g_analysis_pools[i]);
   }
-  ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &Impl::g_analysis_pool);
 
   /* Create scheds */
   Impl::g_scheds = (ABT_sched *)malloc(sizeof(ABT_sched) * Impl::g_num_xstreams);
   for (int i = 0; i < Impl::g_num_xstreams; i++) {
-    ABT_pool mypools[2];
+    ABT_pool mypools[Impl::g_num_xstreams + 1];
     mypools[0] = Impl::g_pools[i];
-    mypools[1] = Impl::g_analysis_pool;
-    ABT_sched_create(&Impl::sched_def, 2, mypools, ABT_SCHED_CONFIG_NULL, &Impl::g_scheds[i]);
+    for (int k = 0; k < Impl::g_num_xstreams; k++) {
+        mypools[k + 1] = Impl::g_analysis_pools[(i + k) % Impl::g_num_xstreams];
+    }
+    ABT_sched_create(&Impl::sched_def, Impl::g_num_xstreams + 1, mypools, ABT_SCHED_CONFIG_NULL, &Impl::g_scheds[i]);
   }
 
   /* Primary ES creation */
@@ -204,20 +229,20 @@ void Argobots::impl_initialize()
   /* Mutex */
   ABT_mutex_create(&Impl::g_mutex);
 
-  Impl::g_num_pgroups = 56;
-#if ENABLE_PREEMPTION
-  ABT_preemption_group *preemption_groups = (ABT_preemption_group *)malloc(sizeof(ABT_preemption_group) * Impl::g_num_pgroups);
-  ABT_preemption_timer_create_groups(Impl::g_num_pgroups, preemption_groups);
-  for (int i = 0; i < Impl::g_num_pgroups; i++) {
-    int begin = i * Impl::g_num_xstreams / Impl::g_num_pgroups;
-    int end   = (i + 1) * Impl::g_num_xstreams / Impl::g_num_pgroups;
-    if (end > Impl::g_num_xstreams) end = Impl::g_num_xstreams;
-    ABT_preemption_timer_set_xstreams(preemption_groups[i], end - begin, &Impl::g_xstreams[begin]);
+  if (Impl::g_enable_preemption) {
+    Impl::g_num_pgroups = 1;
+    Impl::g_preemption_groups = (ABT_preemption_group *)malloc(sizeof(ABT_preemption_group) * Impl::g_num_pgroups);
+    ABT_preemption_timer_create_groups(Impl::g_num_pgroups, Impl::g_preemption_groups);
+    for (int i = 0; i < Impl::g_num_pgroups; i++) {
+      int begin = i * Impl::g_num_xstreams / Impl::g_num_pgroups;
+      int end   = (i + 1) * Impl::g_num_xstreams / Impl::g_num_pgroups;
+      if (end > Impl::g_num_xstreams) end = Impl::g_num_xstreams;
+      ABT_preemption_timer_set_xstreams(Impl::g_preemption_groups[i], end - begin, &Impl::g_xstreams[begin]);
+    }
+    for (int i = 0; i < Impl::g_num_pgroups; i++) {
+      ABT_preemption_timer_start(Impl::g_preemption_groups[i]);
+    }
   }
-  for (int i = 0; i < Impl::g_num_pgroups; i++) {
-    ABT_preemption_timer_start(preemption_groups[i]);
-  }
-#endif
 }
 
 //----------------------------------------------------------------------------
@@ -233,12 +258,12 @@ void Argobots::impl_finalize()
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-#if ENABLE_PREEMPTION
-  for (int i = 0; i < Impl::g_num_pgroups; i++) {
-    ABT_preemption_timer_delete(preemption_groups[i]);
+  if (Impl::g_enable_preemption) {
+    for (int i = 0; i < Impl::g_num_pgroups; i++) {
+      ABT_preemption_timer_delete(Impl::g_preemption_groups[i]);
+    }
+    free(Impl::g_preemption_groups);
   }
-  free(preemption_groups);
-#endif
 
   /* Join and free Execution Streams */
   for (int i = 1; i < Impl::g_num_xstreams; i++) {
