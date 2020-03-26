@@ -62,6 +62,8 @@
 
 #include "logger.h"
 
+/* Scheduler */
+
 namespace Kokkos {
 namespace Impl {
 
@@ -70,8 +72,6 @@ ABT_pool* g_analysis_pools;
 int g_num_xstreams;
 int g_num_threads;
 int g_num_pgroups;
-ABT_barrier g_barrier;
-ABT_mutex g_mutex;
 ABT_xstream* g_xstreams;
 ABT_sched* g_scheds;
 ABT_preemption_group* g_preemption_groups;
@@ -153,6 +153,238 @@ static ABT_sched_def sched_def = {
 } // namespace Impl
 } // namespace Kokkos
 
+/* Pool */
+
+namespace Kokkos {
+namespace Impl {
+
+struct lifo_unit {
+  struct lifo_unit *p_next;
+  ABT_pool pool;
+  union {
+    ABT_thread thread;
+    ABT_task   task;
+  };
+  ABT_unit_type type;
+};
+
+struct lifo_pool_data {
+  ABT_mutex mutex;
+  size_t num_units;
+  struct lifo_unit *p_head;
+};
+
+typedef struct lifo_unit unit_t;
+typedef struct lifo_pool_data data_t;
+
+static inline data_t *pool_get_data_ptr(void *p_data)
+{
+  return (data_t *)p_data;
+}
+
+int pool_init(ABT_pool pool, ABT_pool_config config)
+{
+  int abt_errno = ABT_SUCCESS;
+
+  data_t *p_data = (data_t *)malloc(sizeof(data_t));
+  if (!p_data) return ABT_ERR_MEM;
+
+  /* Initialize the mutex */
+  ABT_mutex_create(&p_data->mutex);
+
+  p_data->num_units = 0;
+  p_data->p_head = NULL;
+
+  ABT_pool_set_data(pool, p_data);
+
+  return abt_errno;
+}
+
+static int pool_free(ABT_pool pool)
+{
+  int abt_errno = ABT_SUCCESS;
+  void *data;
+  ABT_pool_get_data(pool, &data);
+  data_t *p_data = pool_get_data_ptr(data);
+
+  free(p_data);
+
+  return abt_errno;
+}
+
+static size_t pool_get_size(ABT_pool pool)
+{
+  void *data;
+  ABT_pool_get_data(pool, &data);
+  data_t *p_data = pool_get_data_ptr(data);
+  return p_data->num_units;
+}
+
+static void pool_push(ABT_pool pool, ABT_unit unit)
+{
+  void *data;
+  ABT_pool_get_data(pool, &data);
+  data_t *p_data = pool_get_data_ptr(data);
+  unit_t *p_unit = (unit_t *)unit;
+
+  ABT_mutex_spinlock(p_data->mutex);
+  if (p_data->num_units == 0) {
+    p_unit->p_next = p_unit;
+    p_data->p_head = p_unit;
+  } else {
+    unit_t *p_head = p_data->p_head;
+    p_unit->p_next = p_head;
+    p_data->p_head = p_unit;
+  }
+  p_data->num_units++;
+
+  p_unit->pool = pool;
+  ABT_mutex_unlock(p_data->mutex);
+}
+
+static ABT_unit pool_pop(ABT_pool pool)
+{
+  void *data;
+  ABT_pool_get_data(pool, &data);
+  data_t *p_data = pool_get_data_ptr(data);
+  unit_t *p_unit = NULL;
+  ABT_unit h_unit = ABT_UNIT_NULL;
+
+  if (p_data->num_units > 0) {
+    ABT_mutex_spinlock(p_data->mutex);
+    if (__atomic_load_n(&p_data->num_units, __ATOMIC_ACQUIRE) > 0) {
+      p_unit = p_data->p_head;
+      if (p_data->num_units == 1) {
+        p_data->p_head = NULL;
+      } else {
+        p_data->p_head = p_unit->p_next;
+      }
+      p_data->num_units--;
+
+      p_unit->p_next = NULL;
+      p_unit->pool = ABT_POOL_NULL;
+
+      h_unit = (ABT_unit)p_unit;
+    }
+    ABT_mutex_unlock(p_data->mutex);
+  }
+
+  return h_unit;
+}
+
+/* Unit functions */
+
+static ABT_unit_type unit_get_type(ABT_unit unit)
+{
+  unit_t *p_unit = (unit_t *)unit;
+  return p_unit->type;
+}
+
+static ABT_thread unit_get_thread(ABT_unit unit)
+{
+  ABT_thread h_thread;
+  unit_t *p_unit = (unit_t *)unit;
+  if (p_unit->type == ABT_UNIT_TYPE_THREAD) {
+    h_thread = p_unit->thread;
+  } else {
+    h_thread = ABT_THREAD_NULL;
+  }
+  return h_thread;
+}
+
+static ABT_task unit_get_task(ABT_unit unit)
+{
+  ABT_task h_task;
+  unit_t *p_unit = (unit_t *)unit;
+  if (p_unit->type == ABT_UNIT_TYPE_TASK) {
+    h_task = p_unit->task;
+  } else {
+    h_task = ABT_TASK_NULL;
+  }
+  return h_task;
+}
+
+static ABT_bool unit_is_in_pool(ABT_unit unit)
+{
+  unit_t *p_unit = (unit_t *)unit;
+  return (p_unit->pool != ABT_POOL_NULL) ? ABT_TRUE : ABT_FALSE;
+}
+
+static ABT_unit unit_create_from_thread(ABT_thread thread)
+{
+  unit_t *p_unit = (unit_t*)malloc(sizeof(unit_t));
+  if (!p_unit) return ABT_UNIT_NULL;
+
+  p_unit->p_next = NULL;
+  p_unit->pool   = ABT_POOL_NULL;
+  p_unit->thread = thread;
+  p_unit->type   = ABT_UNIT_TYPE_THREAD;
+
+  return (ABT_unit)p_unit;
+}
+
+static ABT_unit unit_create_from_task(ABT_task task)
+{
+  unit_t *p_unit = (unit_t*)malloc(sizeof(unit_t));
+  if (!p_unit) return ABT_UNIT_NULL;
+
+  p_unit->p_next = NULL;
+  p_unit->pool   = ABT_POOL_NULL;
+  p_unit->task   = task;
+  p_unit->type   = ABT_UNIT_TYPE_TASK;
+
+  return (ABT_unit)p_unit;
+}
+
+static void unit_free(ABT_unit *unit)
+{
+  free(*unit);
+  *unit = ABT_UNIT_NULL;
+}
+    ABT_pool_access access; /* Access type */
+
+    /* Functions to manage units */
+    ABT_unit_get_type_fn           u_get_type;
+    ABT_unit_get_thread_fn         u_get_thread;
+    ABT_unit_get_task_fn           u_get_task;
+    ABT_unit_is_in_pool_fn         u_is_in_pool;
+    ABT_unit_create_from_thread_fn u_create_from_thread;
+    ABT_unit_create_from_task_fn   u_create_from_task;
+    ABT_unit_free_fn               u_free;
+
+    /* Functions to manage the pool */
+    ABT_pool_init_fn          p_init;
+    ABT_pool_get_size_fn      p_get_size;
+    ABT_pool_push_fn          p_push;
+    ABT_pool_pop_fn           p_pop;
+    ABT_pool_pop_timedwait_fn p_pop_timedwait;
+    ABT_pool_remove_fn        p_remove;
+    ABT_pool_free_fn          p_free;
+    ABT_pool_print_all_fn     p_print_all;
+
+static ABT_pool_def pool_def = {
+  .access               = ABT_POOL_ACCESS_MPMC,
+  .u_get_type           = unit_get_type,
+  .u_get_thread         = unit_get_thread,
+  .u_get_task           = unit_get_task,
+  .u_is_in_pool         = unit_is_in_pool,
+  .u_create_from_thread = unit_create_from_thread,
+  .u_create_from_task   = unit_create_from_task,
+  .u_free               = unit_free,
+  .p_init               = pool_init,
+  .p_get_size           = pool_get_size,
+  .p_push               = pool_push,
+  .p_pop                = pool_pop,
+  .p_pop_timedwait      = NULL,
+  .p_remove             = NULL,
+  .p_free               = pool_free,
+  .p_print_all          = NULL
+};
+
+} // namespace Impl
+} // namespace Kokkos
+
+
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 
@@ -198,7 +430,8 @@ void Argobots::impl_initialize()
   Impl::g_analysis_pools = (ABT_pool *)malloc(sizeof(ABT_pool) * Impl::g_num_xstreams);
   for (int i = 0; i < Impl::g_num_xstreams; i++) {
     ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &Impl::g_pools[i]);
-    ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &Impl::g_analysis_pools[i]);
+    /* ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &Impl::g_analysis_pools[i]); */
+    ABT_pool_create(&Impl::pool_def, ABT_POOL_CONFIG_NULL, &Impl::g_analysis_pools[i]);
   }
 
   /* Create scheds */
@@ -222,12 +455,6 @@ void Argobots::impl_initialize()
     ret = ABT_xstream_create(Impl::g_scheds[i], &Impl::g_xstreams[i]);
     HANDLE_ERROR(ret, "ABT_xstream_create");
   }
-
-  /* Barrier */
-  ABT_barrier_create(Impl::g_num_threads, &Impl::g_barrier);
-
-  /* Mutex */
-  ABT_mutex_create(&Impl::g_mutex);
 
   if (Impl::g_enable_preemption) {
     Impl::g_num_pgroups = 1;
@@ -275,12 +502,6 @@ void Argobots::impl_finalize()
   for (int i = 1; i < Impl::g_num_xstreams; i++) {
     ABT_sched_free(&Impl::g_scheds[i]);
   }
-
-  /* Free barrier */
-  ABT_barrier_free(&Impl::g_barrier);
-
-  /* Free mutex */
-  ABT_mutex_free(&Impl::g_mutex);
 
   ret = ABT_finalize();
   HANDLE_ERROR(ret, "ABT_finalize");
