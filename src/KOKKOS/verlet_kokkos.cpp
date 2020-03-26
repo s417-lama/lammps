@@ -207,6 +207,13 @@ void VerletKokkos::setup(int flag)
     n_analysis_threads = Kokkos::Impl::g_num_threads;
   }
 
+  s = getenv("LAMMPS_ANALYSIS_INTERVAL");
+  if (s) {
+    analysis_intvl = atoi(s);
+  } else {
+    analysis_intvl = 1;
+  }
+
   analysis_started = 0;
 
   threads = (ABT_thread*)malloc(sizeof(ABT_thread) * n_analysis_threads);
@@ -419,8 +426,8 @@ void VerletKokkos::run(int n)
       timer->stamp(Timer::NEIGH);
     }
 
-    analysis_wait();
-    if (enable_analysis) {
+    if (enable_analysis && i % analysis_intvl == 0) {
+      analysis_wait();
       analysis((NeighListKokkos<LMPDeviceType>*)force->pair->list);
     }
     if (!async_analysis) {

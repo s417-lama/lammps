@@ -84,6 +84,7 @@ class VerletKokkos : public Verlet {
   task** ts;
   counter_t* bond_counts;
   int analysis_started;
+  int analysis_intvl;
 
   template<class DeviceType>
   void analysis(NeighListKokkos<DeviceType>* list)
