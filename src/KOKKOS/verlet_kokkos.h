@@ -133,7 +133,7 @@ class VerletKokkos : public Verlet {
       ABT_thread_attr attr;
       ABT_thread_attr_create(&attr);
       ABT_thread_attr_set_preemption_type(attr, ABT_PREEMPTION_YIELD);
-      ret = ABT_thread_create(Kokkos::Impl::g_analysis_pools[tid % Kokkos::Impl::g_num_xstreams],
+      ret = ABT_thread_create(Kokkos::Impl::g_analysis_pools[tid % (Kokkos::Impl::g_num_xstreams - 1) + 1],
                               invoke,
                               ts[tid],
                               attr,
