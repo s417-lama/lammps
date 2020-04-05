@@ -50,10 +50,17 @@ struct callable_task : task {
   void* execute() { func(); return NULL; }
 };
 
+#ifdef KOKKOS_ENABLE_OPENMP
+static void *invoke(void *arg_)
+#else
 static void invoke(void *arg_)
+#endif
 {
   task *arg = (task *)arg_;
   arg->execute();
+#ifdef KOKKOS_ENABLE_OPENMP
+  return NULL;
+#endif
 }
 
 class VerletKokkos : public Verlet {
@@ -80,11 +87,16 @@ class VerletKokkos : public Verlet {
   int enable_analysis;
   int async_analysis;
   int n_analysis_threads;
-  ABT_thread* threads;
   task** ts;
   counter_t* bond_counts;
   int analysis_started;
   int analysis_intvl;
+#ifdef KOKKOS_ENABLE_OPENMP
+  pthread_t* threads;
+#endif
+#ifdef KOKKOS_ENABLE_ARGOBOTS
+  ABT_thread* threads;
+#endif
 
   template<class DeviceType>
   void analysis(NeighListKokkos<DeviceType>* list)
@@ -104,6 +116,18 @@ class VerletKokkos : public Verlet {
       x_(i,1) = x(i,1);
       x_(i,2) = x(i,2);
     });
+
+#ifdef KOKKOS_ENABLE_OPENMP
+    // unset affinity
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    cpu_set_t cpus;
+    CPU_ZERO(&cpus);
+    for (int i = 0; i < Kokkos::OpenMP::thread_pool_size(); i++) {
+      CPU_SET(i, &cpus);
+    }
+    pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpus);
+#endif
 
     int nb = (nlocal + n_analysis_threads - 1) / n_analysis_threads;
 
@@ -130,6 +154,10 @@ class VerletKokkos : public Verlet {
       };
 
       ts[tid] = new callable_task<decltype(thread_fn)>(thread_fn);
+#ifdef KOKKOS_ENABLE_OPENMP
+      pthread_create(&threads[tid], &attr, invoke, ts[tid]);
+#endif
+#ifdef KOKKOS_ENABLE_ARGOBOTS
       ABT_thread_attr attr;
       ABT_thread_attr_create(&attr);
       ABT_thread_attr_set_preemption_type(attr, ABT_PREEMPTION_YIELD);
@@ -139,6 +167,7 @@ class VerletKokkos : public Verlet {
                               attr,
                               &threads[tid]);
       HANDLE_ERROR(ret, "ABT_thread_create");
+#endif
     }
 
     memoryKK->destroy_kokkos(x_);
@@ -152,8 +181,13 @@ class VerletKokkos : public Verlet {
     if (analysis_started) {
       long bond_count = 0;
       for (int tid = 0; tid < n_analysis_threads; tid++) {
+#ifdef KOKKOS_ENABLE_OPENMP
+        pthread_join(threads[tid], NULL);
+#endif
+#ifdef KOKKOS_ENABLE_ARGOBOTS
         ret = ABT_thread_free(&threads[tid]);
         HANDLE_ERROR(ret, "ABT_thread_free");
+#endif
         delete ts[tid];
         bond_count += bond_counts[tid].val;
       }

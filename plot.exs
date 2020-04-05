@@ -7,6 +7,7 @@ threads = [55, 110, 220, 440, 880, 1760, 3520, 7040, 14080]
 result_dir = "~/lammps/results/latest"
 
 data = [
+  # {"omp_async" , "Async (omp)"       , "#1f77b4", "dot"    , "square-open" },
   {"sync"      , "Sync"              , "#1f77b4", "dot"    , "square-open" },
   {"async"     , "Async"             , "#ff7f0e", "dashdot", "diamond-open"},
   {"preemption", "Async + Preemption", "#2ca02c", "solid"  , "circle"      },

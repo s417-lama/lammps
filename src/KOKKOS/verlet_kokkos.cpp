@@ -204,7 +204,7 @@ void VerletKokkos::setup(int flag)
   if (s) {
     n_analysis_threads = atoi(s);
   } else {
-    n_analysis_threads = Kokkos::Impl::g_num_threads;
+    n_analysis_threads = 1;
   }
 
   s = getenv("LAMMPS_ANALYSIS_INTERVAL");
@@ -216,7 +216,12 @@ void VerletKokkos::setup(int flag)
 
   analysis_started = 0;
 
+#ifdef KOKKOS_ENABLE_OPENMP
+  threads = (pthread_t*)malloc(sizeof(pthread_t) * n_analysis_threads);
+#endif
+#ifdef KOKKOS_ENABLE_ARGOBOTS
   threads = (ABT_thread*)malloc(sizeof(ABT_thread) * n_analysis_threads);
+#endif
   ts = (task**)malloc(sizeof(task*) * n_analysis_threads);
   posix_memalign((void**)&bond_counts, 64, sizeof(counter_t) * n_analysis_threads);
 }

@@ -13,16 +13,22 @@ export LAMMPS_ABT_NUM_THREADS=56
 N_REPEATS=10
 ANALYSIS_INTVLS=(1 2)
 ANALYSIS_THREADS=(55 110 220 440 880 1760 3520 7040 14080)
+RESULT_APPEND=1
+# RESULT_APPEND=0
 
-DATETIME=${DATETIME:-$(TZ='America/Chicago' date +%Y-%m-%d_%H-%M-%S)}
 RESULT_DIR=${RESULT_DIR:-${PWD}/results}
-JOB_DIR=${RESULT_DIR}/${DATETIME}
+if [[ $RESULT_APPEND -eq 1 ]]; then
+  JOB_DIR=${RESULT_DIR}/latest
+else
+  DATETIME=${DATETIME:-$(TZ='America/Chicago' date +%Y-%m-%d_%H-%M-%S)}
+  JOB_DIR=${RESULT_DIR}/${DATETIME}
+fi
 
 mkdir -p $JOB_DIR
 
 cd src
 
-run_lammps() {
+run_lammps_omp() {
   local NAME=$1
   for intvl in ${ANALYSIS_INTVLS[@]}; do
     for thread in ${ANALYSIS_THREADS[@]}; do
@@ -30,8 +36,28 @@ run_lammps() {
         export LAMMPS_ANALYSIS_INTERVAL=$intvl
         export LAMMPS_NUM_ANALYSIS_THREADS=$thread
 
-        local OUT_FILE=${JOB_DIR}/${NAME}_intvl_${intvl}_thread_${thread}_${i}.out
-        local ERR_FILE=${JOB_DIR}/${NAME}_intvl_${intvl}_thread_${thread}_${i}.err
+        export OMP_PROC_BIND=true
+        export KMP_BLOCKTIME=0
+
+        local OUT_FILE=${JOB_DIR}/omp_${NAME}_intvl_${intvl}_thread_${thread}_${i}.out
+        local ERR_FILE=${JOB_DIR}/omp_${NAME}_intvl_${intvl}_thread_${thread}_${i}.err
+
+        numactl -iall mpirun ./lmp_kokkos_omp -in ../bench/in.lj -var x 8 -var y 8 -var z 8 -k on t 56 -sf kk -pk kokkos newton off neigh full 2> $ERR_FILE | tee $OUT_FILE
+      done
+    done
+  done
+}
+
+run_lammps_abt() {
+  local NAME=$1
+  for intvl in ${ANALYSIS_INTVLS[@]}; do
+    for thread in ${ANALYSIS_THREADS[@]}; do
+      for i in $(seq 1 $N_REPEATS); do
+        export LAMMPS_ANALYSIS_INTERVAL=$intvl
+        export LAMMPS_NUM_ANALYSIS_THREADS=$thread
+
+        local OUT_FILE=${JOB_DIR}/abt_${NAME}_intvl_${intvl}_thread_${thread}_${i}.out
+        local ERR_FILE=${JOB_DIR}/abt_${NAME}_intvl_${intvl}_thread_${thread}_${i}.err
 
         numactl -iall mpirun ./lmp_kokkos_abt -in ../bench/in.lj -var x 8 -var y 8 -var z 8 -k on t 56 -sf kk -pk kokkos newton off neigh full 2> $ERR_FILE | tee $OUT_FILE
       done
@@ -41,22 +67,32 @@ run_lammps() {
 
 export LAMMPS_ENABLE_ANALYSIS=0
 export LAMMPS_ASYNC_ANALYSIS=0
-export LAMMPS_ABT_ENABLE_PREEMPTION=0
-run_lammps no_analysis
-
-export LAMMPS_ENABLE_ANALYSIS=1
-export LAMMPS_ASYNC_ANALYSIS=0
-export LAMMPS_ABT_ENABLE_PREEMPTION=0
-run_lammps sync
+run_lammps_omp no_analysis
 
 export LAMMPS_ENABLE_ANALYSIS=1
 export LAMMPS_ASYNC_ANALYSIS=1
-export LAMMPS_ABT_ENABLE_PREEMPTION=0
-run_lammps async
+run_lammps_omp async
 
-export LAMMPS_ENABLE_ANALYSIS=1
-export LAMMPS_ASYNC_ANALYSIS=1
-export LAMMPS_ABT_ENABLE_PREEMPTION=1
-run_lammps preemption
+# export LAMMPS_ENABLE_ANALYSIS=0
+# export LAMMPS_ASYNC_ANALYSIS=0
+# export LAMMPS_ABT_ENABLE_PREEMPTION=0
+# run_lammps_abt no_analysis
 
-ln -sfn ${JOB_DIR} ${RESULT_DIR}/latest
+# export LAMMPS_ENABLE_ANALYSIS=1
+# export LAMMPS_ASYNC_ANALYSIS=0
+# export LAMMPS_ABT_ENABLE_PREEMPTION=0
+# run_lammps_abt sync
+
+# export LAMMPS_ENABLE_ANALYSIS=1
+# export LAMMPS_ASYNC_ANALYSIS=1
+# export LAMMPS_ABT_ENABLE_PREEMPTION=0
+# run_lammps_abt async
+
+# export LAMMPS_ENABLE_ANALYSIS=1
+# export LAMMPS_ASYNC_ANALYSIS=1
+# export LAMMPS_ABT_ENABLE_PREEMPTION=1
+# run_lammps_abt preemption
+
+if [[ $RESULT_APPEND -eq 0 ]]; then
+  ln -sfn ${JOB_DIR} ${RESULT_DIR}/latest
+fi
