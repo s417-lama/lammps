@@ -2,15 +2,17 @@ linewidth = 2
 
 # intvl = 1
 intvl = 2
-threads = [55, 110, 220, 440, 880, 1760, 3520, 7040, 14080]
+# intvl = 3
+thread = 55
+sizes = [2, 4, 6, 8, 10, 12]
+natoms = [256000, 2048000, 6912000, 16384000, 32000000, 55296000]
 
 result_dir = "~/lammps/results/latest"
 
 data = [
-  # {"omp_async" , "Pthread"           , "#d62728", "dash"   , "x-thin"      },
-  {"sync"      , "Sync"              , "#1f77b4", "dot"    , "square-open" },
-  {"async"     , "Async"             , "#ff7f0e", "dashdot", "diamond-open"},
-  {"preemption", "Async + Preemption", "#2ca02c", "solid"  , "circle"      },
+  {"omp_async"     , "Pthread"           , "#d62728", "dash"   , "x-thin"     },
+  {"abt_sync"      , "Non-preemptive ULT", "#1f77b4", "dot"    , "square-open"},
+  {"abt_preemption", "Preemptive ULT"    , "#2ca02c", "solid"  , "circle"     },
 ]
 
 get_median_of_files = fn path ->
@@ -34,17 +36,21 @@ get_median_of_files = fn path ->
   |> Statistics.median()
 end
 
-baseline = get_median_of_files.("#{result_dir}/no_analysis_*.out")
+baselines =
+  Enum.map(sizes, fn size ->
+    get_median_of_files.("#{result_dir}/abt_no_analysis_*_size_#{size}_*.out")
+  end)
 
 data
 |> Enum.map(fn {prefix, title, color, dash, symbol} ->
   ys =
-    Enum.map(threads, fn thread ->
-      m = get_median_of_files.("#{result_dir}/#{prefix}_intvl_#{intvl}_thread_#{thread}_*.out")
+    Enum.zip(sizes, baselines)
+    |> Enum.map(fn {size, baseline} ->
+      m = get_median_of_files.("#{result_dir}/#{prefix}_intvl_#{intvl}_thread_#{thread}_size_#{size}_*.out")
       m / baseline - 1
     end)
   %{
-    x: threads,
+    x: natoms,
     y: ys,
     type: "scatter",
     name: title,
@@ -62,33 +68,30 @@ data
 end)
 |> PlotlyEx.plot(%{
   width:  400,
-  height: 400,
-  separators: ".",
+  height: 350,
   xaxis: %{
-    type: "log",
-    title: %{text: "# of analysis threads"},
+    title: %{text: "# of atoms"},
     showline: true,
-    tickvals: threads,
-    exponentformat: "none",
+    exponentformat: "power",
+    range: [0, Enum.max(natoms) * 1.05],
   },
   yaxis: %{
     title: %{text: "Overhead"},
     showline: true,
-    # range: [0, 0.85],
-    range: [0, 0.45],
-    dtick: 0.1,
+    # range: [0, 2],
+    range: [0, 1],
   },
   font: %{
     size: 22,
   },
   legend: %{
-      x: 0.4,
-      y: 1.0,
+    x: 0.4,
+    y: 1.0,
   },
   margin: %{
     l: 70,
     r: 0,
-    b: 100,
+    b: 70,
     t: 10,
     pad: 0,
   },
