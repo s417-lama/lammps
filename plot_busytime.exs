@@ -1,12 +1,11 @@
 linewidth = 2
 
-# intvl = 1
-intvl = 2
+intvl = 1
+# intvl = 2
 threads = [55, 110, 220, 440, 880, 1760, 3520, 7040, 14080]
 size = 8
 
-result_dir = "~/lammps/results/2020-04-02_09-41-29"
-# result_dir = "~/lammps/results/latest"
+result_dir = "~/lammps/results/latest"
 
 data = [
   {"sync"      , "Sync"              , "#1f77b4", "dot"    , "square-open" },
@@ -14,7 +13,7 @@ data = [
   {"preemption", "Async + Preemption", "#2ca02c", "solid"  , "circle"      },
 ]
 
-get_statistics_of_files = fn(path, op_fn) ->
+get_statistics_of_files = fn path ->
   data =
     path
     |> Path.expand()
@@ -23,30 +22,22 @@ get_statistics_of_files = fn(path, op_fn) ->
       File.stream!(path)
       |> Stream.map(&String.split/1)
       |> Stream.map(fn
-        ["Loop", "time", "of", time | _] -> Float.parse(time)
-        _                                -> nil
+        ["[rank", _, "worker", _, "busy", "ratio:", ratio] -> Float.parse(ratio) |> elem(0)
+        _                                                  -> nil
       end)
       |> Stream.filter(&!is_nil(&1))
+      |> Stream.map(fn x -> 1 - x end)
       |> Enum.to_list()
-      |> case do
-        [{time, ""}] -> time
-        _            -> nil
-      end
+      |> Statistics.mean()
     end)
-    |> Enum.map(op_fn)
   {Statistics.median(data), Statistics.stdev(data)}
 end
-
-{baseline, _} = get_statistics_of_files.("#{result_dir}/no_analysis_*.out", &(&1))
-# baseline = get_median_of_files.("#{result_dir}/abt_no_analysis_*.out")
 
 data
 |> Enum.map(fn {prefix, title, color, dash, symbol} ->
   {ys, errors} =
     Enum.map(threads, fn thread ->
-      get_statistics_of_files.("#{result_dir}/#{prefix}_intvl_#{intvl}_thread_#{thread}_*.out", fn x -> x / baseline - 1 end)
-      # m = get_median_of_files.("#{result_dir}/abt_#{prefix}_intvl_#{intvl}_thread_#{thread}_size_#{size}_*.out")
-      # m / baseline - 1
+      get_statistics_of_files.("#{result_dir}/abt_#{prefix}_intvl_#{intvl}_thread_#{thread}_size_#{size}_*.out")
     end)
     |> Enum.unzip()
   %{
@@ -83,9 +74,8 @@ end)
     exponentformat: "none",
   },
   yaxis: %{
-    title: %{text: "Overhead"},
+    title: %{text: "Worker Idleness"},
     showline: true,
-    # range: [0, 0.85],
     range: [0, 0.48],
     dtick: 0.1,
   },

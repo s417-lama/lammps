@@ -76,10 +76,29 @@ ABT_xstream* g_xstreams;
 ABT_sched* g_scheds;
 ABT_preemption_group* g_preemption_groups;
 int g_enable_preemption;
+busytime_measure_t* g_busytimes;
 
 static int sched_init(ABT_sched sched, ABT_sched_config config)
 {
   return ABT_SUCCESS;
+}
+
+static void run_unit(ABT_unit unit, ABT_pool pool, int rank)
+{
+  volatile busytime_measure_t* volatile p_busytime = &g_busytimes[rank];
+
+  p_busytime->executing = 1;
+
+  p_busytime->last_time = mlog_clock_gettime_in_nsec();
+  ABT_xstream_run_unit(unit, pool);
+  uint64_t t2 = mlog_clock_gettime_in_nsec();
+
+  if (p_busytime->begin_time > 0) {
+    uint64_t t1 = std::max(p_busytime->begin_time, p_busytime->last_time);
+    p_busytime->acc += t2 - t1;
+  }
+
+  p_busytime->executing = 0;
 }
 
 static void sched_run(ABT_sched sched)
@@ -102,14 +121,14 @@ static void sched_run(ABT_sched sched)
   while (1) {
     ABT_pool_pop(pools[0], &unit);
     if (unit != ABT_UNIT_NULL) {
-      ABT_xstream_run_unit(unit, pools[0]);
+      run_unit(unit, pools[0], rank);
     } else {
       /* Pop an analysis task */
       ABT_pool_pop(pools[1], &unit);
       if (unit != ABT_UNIT_NULL) {
         void *bp = logger_begin_tl(rank);
 
-        ABT_xstream_run_unit(unit, pools[1]);
+        run_unit(unit, pools[1], rank);
 
         logger_end_tl(rank, bp, "analysis");
       } else if (num_pools > 2) {
@@ -119,7 +138,7 @@ static void sched_run(ABT_sched sched)
         if (unit != ABT_UNIT_NULL) {
           void *bp = logger_begin_tl(rank);
 
-          ABT_xstream_run_unit(unit, pools[target]);
+          run_unit(unit, pools[target], rank);
 
           logger_end_tl(rank, bp, "analysis");
         }
@@ -421,6 +440,15 @@ void Argobots::impl_initialize()
   }
 
   logger_init(Impl::g_num_xstreams);
+
+  /* setup for busy time measurement */
+  posix_memalign((void**)&Impl::g_busytimes, 64, Impl::g_num_xstreams * sizeof(busytime_measure_t));
+  for (int i = 0; i < Impl::g_num_xstreams; i++) {
+    Impl::g_busytimes[i].acc = 0;
+    Impl::g_busytimes[i].begin_time = 0;
+    Impl::g_busytimes[i].last_time = 0;
+    Impl::g_busytimes[i].executing = 0;
+  }
 
   int ret;
   ABT_init(0, NULL);

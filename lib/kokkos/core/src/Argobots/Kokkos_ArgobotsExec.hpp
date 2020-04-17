@@ -71,6 +71,13 @@
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 
+struct busytime_measure_t {
+  uint64_t acc;
+  uint64_t begin_time;
+  uint64_t last_time;
+  int executing;
+} __attribute__((aligned(64)));
+
 namespace Kokkos { namespace Impl {
 
 extern ABT_pool* g_pools;
@@ -84,6 +91,7 @@ extern ABT_xstream* g_xstreams;
 extern ABT_sched* g_scheds;
 extern ABT_preemption_group* g_preemption_groups;
 extern int g_enable_preemption;
+extern busytime_measure_t* g_busytimes;
 
 //----------------------------------------------------------------------------
 

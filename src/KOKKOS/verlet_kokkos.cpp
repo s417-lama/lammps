@@ -357,6 +357,13 @@ void VerletKokkos::run(int n)
   //static double time = 0.0;
   //Kokkos::Impl::Timer ktimer;
 
+#ifdef KOKKOS_ENABLE_ARGOBOTS
+  uint64_t t1 = mlog_clock_gettime_in_nsec();
+  for (int i = 0; i < Kokkos::Impl::g_num_xstreams; i++) {
+    Kokkos::Impl::g_busytimes[i].begin_time = t1;
+  }
+#endif
+
   timer->init_timeout();
   for (int i = 0; i < n; i++) {
 
@@ -614,6 +621,21 @@ void VerletKokkos::run(int n)
   }
 
   analysis_wait();
+
+#ifdef KOKKOS_ENABLE_ARGOBOTS
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  uint64_t t2 = mlog_clock_gettime_in_nsec();
+
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+  Kokkos::Impl::g_busytimes[0].acc += t2 - Kokkos::Impl::g_busytimes[0].last_time;
+  for (int i = 0; i < Kokkos::Impl::g_num_xstreams; i++) {
+    uint64_t acc = Kokkos::Impl::g_busytimes[i].acc;
+    printf("[rank %d, worker %d] busy ratio: %f\n", rank, i, (double)acc / (t2 - t1));
+  }
+#endif
 
   free(threads);
   free(ts);

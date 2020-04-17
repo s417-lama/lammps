@@ -11,12 +11,14 @@ export LAMMPS_ABT_NUM_XSTREAMS=56
 export LAMMPS_ABT_NUM_THREADS=56
 
 N_REPEATS=10
-ANALYSIS_INTVLS=(1 2 3)
-# ANALYSIS_THREADS=(55 110 220 440 880 1760 3520 7040 14080)
-ANALYSIS_THREADS=(55)
-SIZES=(2 4 6 8 10 12)
-RESULT_APPEND=1
-# RESULT_APPEND=0
+ANALYSIS_INTVLS=(1 2)
+ANALYSIS_THREADS=(55 110 220 440 880 1760 3520 7040 14080)
+SIZES=(8)
+# ANALYSIS_THREADS=(55)
+# SIZES=(2 4 6 8 10 12)
+
+# RESULT_APPEND=1
+RESULT_APPEND=0
 
 RESULT_DIR=${RESULT_DIR:-${PWD}/results}
 if [[ $RESULT_APPEND -eq 1 ]]; then
@@ -71,33 +73,33 @@ run_lammps_abt() {
   done
 }
 
+# export LAMMPS_ENABLE_ANALYSIS=0
+# export LAMMPS_ASYNC_ANALYSIS=0
+# run_lammps_omp no_analysis
+
+# export LAMMPS_ENABLE_ANALYSIS=1
+# export LAMMPS_ASYNC_ANALYSIS=1
+# run_lammps_omp async
+
 export LAMMPS_ENABLE_ANALYSIS=0
 export LAMMPS_ASYNC_ANALYSIS=0
-run_lammps_omp no_analysis
+export LAMMPS_ABT_ENABLE_PREEMPTION=0
+run_lammps_abt no_analysis
+
+export LAMMPS_ENABLE_ANALYSIS=1
+export LAMMPS_ASYNC_ANALYSIS=0
+export LAMMPS_ABT_ENABLE_PREEMPTION=0
+run_lammps_abt sync
 
 export LAMMPS_ENABLE_ANALYSIS=1
 export LAMMPS_ASYNC_ANALYSIS=1
-run_lammps_omp async
+export LAMMPS_ABT_ENABLE_PREEMPTION=0
+run_lammps_abt async
 
-# export LAMMPS_ENABLE_ANALYSIS=0
-# export LAMMPS_ASYNC_ANALYSIS=0
-# export LAMMPS_ABT_ENABLE_PREEMPTION=0
-# run_lammps_abt no_analysis
-
-# export LAMMPS_ENABLE_ANALYSIS=1
-# export LAMMPS_ASYNC_ANALYSIS=0
-# export LAMMPS_ABT_ENABLE_PREEMPTION=0
-# run_lammps_abt sync
-
-# export LAMMPS_ENABLE_ANALYSIS=1
-# export LAMMPS_ASYNC_ANALYSIS=1
-# export LAMMPS_ABT_ENABLE_PREEMPTION=0
-# run_lammps_abt async
-
-# export LAMMPS_ENABLE_ANALYSIS=1
-# export LAMMPS_ASYNC_ANALYSIS=1
-# export LAMMPS_ABT_ENABLE_PREEMPTION=1
-# run_lammps_abt preemption
+export LAMMPS_ENABLE_ANALYSIS=1
+export LAMMPS_ASYNC_ANALYSIS=1
+export LAMMPS_ABT_ENABLE_PREEMPTION=1
+run_lammps_abt preemption
 
 if [[ $RESULT_APPEND -eq 0 ]]; then
   ln -sfn ${JOB_DIR} ${RESULT_DIR}/latest
