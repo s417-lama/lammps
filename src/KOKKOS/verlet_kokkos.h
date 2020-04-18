@@ -28,6 +28,8 @@ IntegrateStyle(verlet/kk/host,VerletKokkos)
 #include "neigh_list_kokkos.h"
 #include "memory_kokkos.h"
 #include <mpi.h>
+#include <sys/resource.h>
+#include <sys/syscall.h>
 
 #define HANDLE_ERROR(ret, msg)                        \
     if (ret != ABT_SUCCESS) {                         \
@@ -51,17 +53,30 @@ struct callable_task : task {
 };
 
 #ifdef KOKKOS_ENABLE_OPENMP
+static int pthreads_nice;
+
 static void *invoke(void *arg_)
+{
+  if (pthreads_nice > 0) {
+    pid_t tid = syscall(SYS_gettid);
+    int ret = setpriority(PRIO_PROCESS, tid, pthreads_nice);
+    if (ret != 0) {
+      printf("error: setpriority\n");
+      abort();
+    }
+  }
+
+  task *arg = (task *)arg_;
+  arg->execute();
+  return NULL;
+}
 #else
 static void invoke(void *arg_)
-#endif
 {
   task *arg = (task *)arg_;
   arg->execute();
-#ifdef KOKKOS_ENABLE_OPENMP
-  return NULL;
-#endif
 }
+#endif
 
 class VerletKokkos : public Verlet {
  public:

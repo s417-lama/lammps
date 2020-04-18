@@ -214,6 +214,15 @@ void VerletKokkos::setup(int flag)
     analysis_intvl = 1;
   }
 
+#ifdef KOKKOS_ENABLE_OPENMP
+  s = getenv("LAMMPS_ANALYSIS_PTHREAD_NICE");
+  if (s) {
+    pthreads_nice = atoi(s);
+  } else {
+    pthreads_nice = 0;
+  }
+#endif
+
   analysis_started = 0;
 
 #ifdef KOKKOS_ENABLE_OPENMP
