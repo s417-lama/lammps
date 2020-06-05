@@ -1,7 +1,7 @@
 linewidth = 2
 
-# intvl = 1
-intvl = 2
+intvl = 1
+# intvl = 2
 threads = [55, 110, 220, 440, 880, 1760, 3520, 7040, 14080]
 size = 8
 
@@ -9,9 +9,9 @@ result_dir = "~/lammps/results/2020-04-02_09-41-29"
 # result_dir = "~/lammps/results/latest"
 
 data = [
-  {"sync"      , "Sync"              , "#1f77b4", "dot"    , "square-open" },
-  {"async"     , "Async"             , "#ff7f0e", "dashdot", "diamond-open"},
-  {"preemption", "Async + Preemption", "#2ca02c", "solid"  , "circle"      },
+  # {"sync"      , "Sync"              , "#1f77b4", "dot"    , "square-open" },
+  {"async"     , "Nonpreemptive Argobots", "#ff7f0e", "dashdot", "diamond-open"},
+  {"preemption", "Preemptive Argobots"   , "#2ca02c", "solid"  , "circle"      },
 ]
 
 get_statistics_of_files = fn(path, op_fn) ->
@@ -73,7 +73,7 @@ data
 end)
 |> PlotlyEx.plot(%{
   width:  400,
-  height: 400,
+  height: 360,
   separators: ".",
   xaxis: %{
     type: "log",
@@ -84,9 +84,10 @@ end)
   },
   yaxis: %{
     title: %{text: "Overhead"},
+    tickformat: ",.0%",
     showline: true,
-    # range: [0, 0.85],
-    range: [0, 0.48],
+    range: [0, 0.76],
+    # range: [0, 0.38],
     dtick: 0.1,
   },
   font: %{
@@ -97,7 +98,7 @@ end)
       y: 1.0,
   },
   margin: %{
-    l: 70,
+    l: 80,
     r: 0,
     b: 100,
     t: 10,

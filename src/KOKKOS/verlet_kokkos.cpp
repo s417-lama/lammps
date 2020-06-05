@@ -338,6 +338,24 @@ void VerletKokkos::setup_minimal(int flag)
   update->setupflag = 0;
 }
 
+#ifdef KOKKOS_ENABLE_OPENMP
+void read_busytime(long *totals, long *idles, int n) {
+  FILE *fp = fopen("/proc/stat", "r");
+  char cpu_str[20];
+  long s_user, s_nice, s_system, s_idle, s_iowait, s_irq, s_softirq, s_steal, s_guest, s_guest_nice;
+  fscanf(fp, "%s %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld", cpu_str, &s_user, &s_nice, &s_system, &s_idle, &s_iowait, &s_irq, &s_softirq, &s_steal, &s_guest, &s_guest_nice);
+  while (1) {
+    int i;
+    fscanf(fp, "%3s%d %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld", cpu_str, &i, &s_user, &s_nice, &s_system, &s_idle, &s_iowait, &s_irq, &s_softirq, &s_steal, &s_guest, &s_guest_nice);
+    long total = s_user + s_nice + s_system + s_idle + s_iowait + s_irq + s_softirq + s_steal + s_guest + s_guest_nice;
+    totals[i] = total;
+    idles[i] = s_idle;
+    if (i == n - 1) break;
+  }
+  fclose(fp);
+}
+#endif
+
 /* ----------------------------------------------------------------------
    run for N steps
 ------------------------------------------------------------------------- */
@@ -366,12 +384,38 @@ void VerletKokkos::run(int n)
   //static double time = 0.0;
   //Kokkos::Impl::Timer ktimer;
 
-#ifdef KOKKOS_ENABLE_ARGOBOTS
-  uint64_t t1 = mlog_clock_gettime_in_nsec();
-  for (int i = 0; i < Kokkos::Impl::g_num_xstreams; i++) {
-    Kokkos::Impl::g_busytimes[i].begin_time = t1;
+  int measure_busytime;
+  char *s;
+  s = getenv("LAMMPS_MEASURE_BUSYTIME");
+  if (s) {
+    measure_busytime = atoi(s);
+  } else {
+    measure_busytime = 0;
   }
+
+#ifdef KOKKOS_ENABLE_OPENMP
+  int n_cores = Kokkos::OpenMP::thread_pool_size();
+  long *totals1, *totals2, *idles1, *idles2;
 #endif
+#ifdef KOKKOS_ENABLE_ARGOBOTS
+  uint64_t t1;
+#endif
+
+  if (measure_busytime) {
+#ifdef KOKKOS_ENABLE_OPENMP
+    totals1 = (long*)malloc(sizeof(long) * n_cores);
+    totals2 = (long*)malloc(sizeof(long) * n_cores);
+    idles1 = (long*)malloc(sizeof(long) * n_cores);
+    idles2 = (long*)malloc(sizeof(long) * n_cores);
+    read_busytime(totals1, idles1, n_cores);
+#endif
+#ifdef KOKKOS_ENABLE_ARGOBOTS
+    t1 = mlog_clock_gettime_in_nsec();
+    for (int i = 0; i < Kokkos::Impl::g_num_xstreams; i++) {
+      Kokkos::Impl::g_busytimes[i].begin_time = t1;
+    }
+#endif
+  }
 
   timer->init_timeout();
   for (int i = 0; i < n; i++) {
@@ -631,20 +675,37 @@ void VerletKokkos::run(int n)
 
   analysis_wait();
 
-#ifdef KOKKOS_ENABLE_ARGOBOTS
-  MPI_Barrier(MPI_COMM_WORLD);
+  if (measure_busytime) {
+#ifdef KOKKOS_ENABLE_OPENMP
+    MPI_Barrier(MPI_COMM_WORLD);
 
-  uint64_t t2 = mlog_clock_gettime_in_nsec();
+    read_busytime(totals2, idles2, n_cores);
 
-  int rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-  Kokkos::Impl::g_busytimes[0].acc += t2 - Kokkos::Impl::g_busytimes[0].last_time;
-  for (int i = 0; i < Kokkos::Impl::g_num_xstreams; i++) {
-    uint64_t acc = Kokkos::Impl::g_busytimes[i].acc;
-    printf("[rank %d, worker %d] busy ratio: %f\n", rank, i, (double)acc / (t2 - t1));
-  }
+    for (int i = 0; i < n_cores; i++) {
+      long total_diff = totals2[i] - totals1[i];
+      long idle_diff = idles2[i] - idles1[i];
+      double idleness = (double)idle_diff / total_diff;
+      printf("[rank %d, worker %d] busy ratio: %f\n", rank, i, 1.0 - idleness);
+    }
 #endif
+#ifdef KOKKOS_ENABLE_ARGOBOTS
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    uint64_t t2 = mlog_clock_gettime_in_nsec();
+
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    Kokkos::Impl::g_busytimes[0].acc += t2 - Kokkos::Impl::g_busytimes[0].last_time;
+    for (int i = 0; i < Kokkos::Impl::g_num_xstreams; i++) {
+      uint64_t acc = Kokkos::Impl::g_busytimes[i].acc;
+      printf("[rank %d, worker %d] busy ratio: %f\n", rank, i, (double)acc / (t2 - t1));
+    }
+#endif
+  }
 
   free(threads);
   free(ts);

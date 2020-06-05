@@ -1,19 +1,21 @@
 linewidth = 2
 
-intvl = 1
-# intvl = 2
+# intvl = 1
+intvl = 2
 # intvl = 3
 thread = 55
 sizes = [2, 4, 6, 8, 10, 12]
-natoms = [256000, 2048000, 6912000, 16384000, 32000000, 55296000]
+power = 7
+natoms = [256000, 2048000, 6912000, 16384000, 32000000, 55296000] |> Enum.map(fn x -> x / :math.pow(10, power) end)
 
-result_dir = "~/lammps/results/latest"
+result_dir = "~/lammps/results/2020-04-02_09-41-29_dup"
+# result_dir = "~/lammps/results/latest"
 
 data = [
-  {"omp_async"     , "Pthread"            , "#d62728", "dash"   , "x-thin"      },
-  {"omp_async_nice", "Pthread (with nice)", "#9467bd", "dashdot", "diamond-open"},
-  {"abt_sync"      , "Non-preemptive ULT" , "#1f77b4", "dot"    , "square-open" },
-  {"abt_preemption", "Preemptive ULT"     , "#2ca02c", "solid"  , "circle"      },
+  {"omp_async"     , "Pthreads (w/o priority)", "#d62728", "dash"   , "x-thin"      },
+  {"omp_async_nice", "Pthreads (w/ priority)" , "#9467bd", "dashdot", "diamond-open"},
+  {"abt_sync"      , "Argobots (w/o priority)", "#1f77b4", "dot"    , "square-open" },
+  {"abt_preemption", "Argobots (w/ priority)" , "#2ca02c", "solid"  , "circle"      },
 ]
 
 get_statistics_of_files = fn(path, op_fn) ->
@@ -79,28 +81,33 @@ end)
   width:  400,
   height: 350,
   xaxis: %{
-    title: %{text: "# of atoms"},
+    # title: %{text: "$\\text{# of atoms}\\; (\\times 10^#{power})$"},
+    title: %{text: "# of atoms (&#x00D7; 10&#x207#{power};)"},
     showline: true,
-    exponentformat: "power",
+    # exponentformat: "power",
+    # dtick: 10_000_000,
+    dtick: 1,
     range: [0, Enum.max(natoms) * 1.05],
   },
   yaxis: %{
     title: %{text: "Overhead"},
+    tickformat: ",.0%",
     showline: true,
-    range: [0, 2.4],
-    # range: [0, 1.2],
+    # range: [0, 2.6],
+    range: [0, 1.3],
   },
   font: %{
-    size: 22,
+    size: 20,
   },
   legend: %{
     x: 0.4,
     y: 1.0,
+    # bgcolor: "rgba(0,0,0,0)",
   },
   margin: %{
-    l: 70,
-    r: 0,
-    b: 70,
+    l: 90,
+    r: 10,
+    b: 60,
     t: 10,
     pad: 0,
   },

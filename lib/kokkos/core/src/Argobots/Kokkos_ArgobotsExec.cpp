@@ -77,28 +77,40 @@ ABT_sched* g_scheds;
 ABT_preemption_group* g_preemption_groups;
 int g_enable_preemption;
 busytime_measure_t* g_busytimes;
+int g_measure_busytime;
 
 static int sched_init(ABT_sched sched, ABT_sched_config config)
 {
+  char *s;
+  s = getenv("LAMMPS_MEASURE_BUSYTIME");
+  if (s) {
+    g_measure_busytime = atoi(s);
+  } else {
+    g_measure_busytime = 0;
+  }
   return ABT_SUCCESS;
 }
 
 static void run_unit(ABT_unit unit, ABT_pool pool, int rank)
 {
-  volatile busytime_measure_t* volatile p_busytime = &g_busytimes[rank];
+  if (g_measure_busytime) {
+    volatile busytime_measure_t* volatile p_busytime = &g_busytimes[rank];
 
-  p_busytime->executing = 1;
+    p_busytime->executing = 1;
 
-  p_busytime->last_time = mlog_clock_gettime_in_nsec();
-  ABT_xstream_run_unit(unit, pool);
-  uint64_t t2 = mlog_clock_gettime_in_nsec();
+    p_busytime->last_time = mlog_clock_gettime_in_nsec();
+    ABT_xstream_run_unit(unit, pool);
+    uint64_t t2 = mlog_clock_gettime_in_nsec();
 
-  if (p_busytime->begin_time > 0) {
-    uint64_t t1 = std::max(p_busytime->begin_time, p_busytime->last_time);
-    p_busytime->acc += t2 - t1;
+    if (p_busytime->begin_time > 0) {
+      uint64_t t1 = std::max(p_busytime->begin_time, p_busytime->last_time);
+      p_busytime->acc += t2 - t1;
+    }
+
+    p_busytime->executing = 0;
+  } else {
+    ABT_xstream_run_unit(unit, pool);
   }
-
-  p_busytime->executing = 0;
 }
 
 static void sched_run(ABT_sched sched)
